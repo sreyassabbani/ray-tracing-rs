@@ -21,16 +21,6 @@ where
     }
 }
 
-impl<const N: usize> fmt::Display for Vector<f64, N> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for i in 0..self.entries.len() - 1 {
-            write!(f, "{:?} ", self.entries[i] as u32)?;
-        }
-        write!(f, "{:?}", self.entries[self.entries.len() - 1] as u32)?;
-        Ok(())
-    }
-}
-
 impl<T, const N: usize> FromIterator<T> for Vector<T, N>
 where
     T: Numeric<T>,
