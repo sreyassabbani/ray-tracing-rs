@@ -1,3 +1,4 @@
+use std::fmt;
 use std::ops;
 
 #[derive(Clone)]
@@ -20,9 +21,36 @@ impl ops::Mul<u8> for Color {
     }
 }
 
+impl ops::Mul<f64> for Color {
+    type Output = Color;
+    fn mul(self, rhs: f64) -> Self::Output {
+        // TODO: please make this better
+        Color::new(
+            (self.r as f64 * rhs) as u8,
+            (self.g as f64 * rhs) as u8,
+            (self.b as f64 * rhs) as u8,
+        )
+    }
+}
+
 impl ops::Add<u8> for Color {
     type Output = Color;
     fn add(self, rhs: u8) -> Self::Output {
         Color::new(self.r + rhs, self.g + rhs, self.b + rhs)
+    }
+}
+
+impl ops::Add<Color> for Color {
+    type Output = Color;
+    fn add(self, rhs: Color) -> Self::Output {
+        Color::new(self.r + rhs.r, self.g + rhs.g, self.b + rhs.b)
+    }
+}
+
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // P3 PPM format
+        write!(f, "{} {} {}", self.r, self.g, self.b)?;
+        Ok(())
     }
 }
