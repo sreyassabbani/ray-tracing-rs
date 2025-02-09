@@ -1,11 +1,11 @@
 //! Module defining [`Vector<T, N>`], and variants [`Point<T, 3>`], ...
-//! For other variants, see `src/color.rs` and `...`
 
 use crate::number::Numeric;
 use std::{fmt, ops};
 
+#[derive(Clone)]
 pub struct Vector<T, const N: usize> {
-    entries: Box<[T; N]>,
+    pub(super) entries: Box<[T; N]>,
 }
 
 impl<T, const N: usize> fmt::Debug for Vector<T, N>
@@ -13,7 +13,20 @@ where
     T: Numeric<T>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list().entries(&*self.entries).finish()?;
+        for i in 0..self.entries.len() - 1 {
+            write!(f, "{:?} ", self.entries[i])?;
+        }
+        write!(f, "{:?}", self.entries[self.entries.len() - 1])?;
+        Ok(())
+    }
+}
+
+impl<const N: usize> fmt::Display for Vector<f64, N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for i in 0..self.entries.len() - 1 {
+            write!(f, "{:?} ", self.entries[i] as u32)?;
+        }
+        write!(f, "{:?}", self.entries[self.entries.len() - 1] as u32)?;
         Ok(())
     }
 }
@@ -86,6 +99,23 @@ where
     T: Numeric<T>,
 {
     type Output = Vector<T, N>;
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self::Output {
+        self.entries
+            .iter()
+            .zip(rhs.entries.iter())
+            .map(|(&l, &r)| l + r)
+            .collect()
+    }
+}
+
+impl<T, const N: usize> ops::Add for &Vector<T, N>
+where
+    T: Numeric<T>,
+{
+    type Output = Vector<T, N>;
+
     #[inline]
     fn add(self, rhs: Self) -> Self::Output {
         self.entries
@@ -121,6 +151,36 @@ where
     }
 }
 
+impl<T, const N: usize> ops::Sub for &Vector<T, N>
+where
+    T: Numeric<T>,
+{
+    type Output = Vector<T, N>;
+    #[inline]
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.entries
+            .iter()
+            .zip(rhs.entries.iter())
+            .map(|(&l, &r)| l - r)
+            .collect()
+    }
+}
+
+impl<T, const N: usize> ops::Sub<Vector<T, N>> for &Vector<T, N>
+where
+    T: Numeric<T>,
+{
+    type Output = Vector<T, N>;
+    #[inline]
+    fn sub(self, rhs: Vector<T, N>) -> Self::Output {
+        self.entries
+            .iter()
+            .zip(rhs.entries.iter())
+            .map(|(&l, &r)| l - r)
+            .collect()
+    }
+}
+
 impl<T, const N: usize> ops::SubAssign<T> for Vector<T, N>
 where
     T: Numeric<T>,
@@ -133,6 +193,18 @@ where
 
 // TODO: Left multiplication is blocked by orphan rules
 impl<T, const N: usize> ops::Mul<T> for Vector<T, N>
+where
+    T: Numeric<T>,
+{
+    type Output = Vector<T, N>;
+    /// Provides scalar multiplication of [`Vector<T, N>`]
+    #[inline]
+    fn mul(self, rhs: T) -> Self::Output {
+        Vector::from(self.entries.map(|ele| ele * rhs))
+    }
+}
+
+impl<T, const N: usize> ops::Mul<T> for &Vector<T, N>
 where
     T: Numeric<T>,
 {
@@ -195,6 +267,24 @@ impl<T> Point<T>
 where
     T: Numeric<T>,
 {
+    pub fn new(x: T, y: T, z: T) -> Self {
+        Self {
+            entries: Box::new([x, y, z]),
+        }
+    }
+
+    pub fn x(&self) -> T {
+        self.entries[0]
+    }
+
+    pub fn y(&self) -> T {
+        self.entries[1]
+    }
+
+    pub fn z(&self) -> T {
+        self.entries[2]
+    }
+
     // Pretty sure cross product only exists in 3 (and 7) dimensions
     /// Cross product with another 3D vector ([`Point<T>`])
     pub fn cross(&self, other: &Self) -> Self {
