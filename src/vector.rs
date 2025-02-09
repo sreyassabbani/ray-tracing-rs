@@ -1,78 +1,42 @@
-//! Module defining [`Vector<T, N>`], and variants [`Point<T, 3>`], ...
+//! Module defining [`Vec3`], and variants [`Point`], ...
 //! For other variants, see `src/color.rs` and `...`
 
-use crate::number::Numeric;
 use std::{fmt, ops};
 
-pub struct Vector<T, const N: usize> {
-    entries: Box<[T; N]>,
+#[derive(Copy, Clone)]
+pub struct Vec3 {
+    x: f64,
+    y: f64,
+    z: f64,
 }
 
-impl<T, const N: usize> fmt::Debug for Vector<T, N>
-where
-    T: Numeric<T>,
-{
+impl fmt::Debug for Vec3 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list().entries(&*self.entries).finish()?;
+        f.debug_list().finish()?;
         Ok(())
     }
 }
 
-impl<T, const N: usize> FromIterator<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let mut collection = Self::_new();
-
-        for (i, ele) in iter.into_iter().enumerate() {
-            collection.entries[i] = ele;
-        }
-
-        collection
-    }
-}
-
-impl<T, const N: usize> From<[T; N]> for Vector<T, N> {
-    fn from(value: [T; N]) -> Self {
-        Self {
-            entries: Box::new(value),
-        }
-    }
-}
-
-impl<T, const N: usize> Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    /// An internal method for instantiating a [`Vector<T, N>`] type.
-    pub(super) fn _new() -> Self {
-        Self {
-            // `core::array::from_fn` avoids `Copy`
-            entries: Box::new(core::array::from_fn(|_| T::default())),
-        }
+impl Vec3 {
+    pub fn new(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z }
     }
 
     #[inline]
-    pub fn dot(&self, other: &Self) -> T {
-        // TODO: look into monoids for `additive_identity`
-        self.entries
-            .iter()
-            .zip(other.entries.iter())
-            .map(|(&l, &r)| l * r)
-            .fold(T::additive_identity(), |acc, x| acc + x)
+    pub fn dot(&self, other: &Self) -> f64 {
+        self.x * other.x + self.y * other.y + self.z * other.z
     }
 
-    /// Returns the norm squared of a [`Vector<T, N>`]
+    /// Returns the norm squared of a [`Vec3`]
     #[inline]
-    pub fn norm_squared(&self) -> T {
+    pub fn norm_squared(&self) -> f64 {
         self.dot(self)
     }
 
     /// Norm/length of a vector
     #[inline]
-    pub fn norm(&self) -> T {
-        T::from(self.norm_squared().into().sqrt())
+    pub fn norm(&self) -> f64 {
+        self.norm_squared().sqrt()
     }
 
     #[inline]
@@ -81,129 +45,100 @@ where
     }
 }
 
-impl<T, const N: usize> ops::Add for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
+impl ops::Add for Vec3 {
+    type Output = Vec3;
+
     #[inline]
     fn add(self, rhs: Self) -> Self::Output {
-        self.entries
-            .iter()
-            .zip(rhs.entries.iter())
-            .map(|(&l, &r)| l + r)
-            .collect()
+        Self::Ouput {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+            z: self.z + rhs.z,
+        }
     }
 }
 
-impl<T, const N: usize> ops::AddAssign<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
+impl ops::AddAssign<f64> for Vec3 {
     #[inline]
-    fn add_assign(&mut self, rhs: T) {
-        self.entries.map(|e| e + rhs);
+
+    fn add_assign(&mut self, rhs: f64) {
+        self.x += rhs;
+        self.y += rhs;
+        self.z += rhs;
     }
 }
 
-impl<T, const N: usize> ops::Sub for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
+impl ops::Sub for Vec3 {
+    type Output = Vec3;
+
     #[inline]
     fn sub(self, rhs: Self) -> Self::Output {
-        self.entries
-            .iter()
-            .zip(rhs.entries.iter())
-            .map(|(&l, &r)| l - r)
-            .collect()
+        Self::Output {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+            z: self.z - rhs.z,
+        }
     }
 }
 
-impl<T, const N: usize> ops::SubAssign<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
+impl ops::SubAssign<f64> for Vec3 {
     #[inline]
-    fn sub_assign(&mut self, rhs: T) {
-        self.entries.map(|e| e + rhs);
+    fn sub_assign(&mut self, rhs: f64) {
+        self.x -= rhs;
+        self.y -= rhs;
+        self.z -= rhs;
     }
 }
 
-// TODO: Left multiplication is blocked by orphan rules
-impl<T, const N: usize> ops::Mul<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
+impl ops::Mul<f64> for Vec3 {
+    type Output = Vec3;
+
     /// Provides scalar multiplication of [`Vector<T, N>`]
     #[inline]
-    fn mul(self, rhs: T) -> Self::Output {
-        Vector::from(self.entries.map(|ele| ele * rhs))
+    fn mul(self, rhs: f64) -> Self::Output {
+        Vec3::new(self.x * rhs, self.y * rhs, self.z * rhs)
     }
 }
 
-impl<T, const N: usize> ops::MulAssign<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
+impl ops::MulAssign<f64> for Vec3 {
     #[inline]
-    fn mul_assign(&mut self, rhs: T) {
-        self.entries.map(|e| e + rhs);
+    fn mul_assign(&mut self, rhs: f64) {
+        self.x *= rhs;
+        self.y *= rhs;
+        self.z *= rhs;
     }
 }
 
-impl<T, const N: usize> ops::Div<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
+impl ops::Div<f64> for Vec3 {
+    type Output = Vec3;
+
     /// Provides scalar division of [`Vector<T, N>`]
     #[inline]
-    fn div(self, rhs: T) -> Self::Output {
-        Vector::from(self.entries.map(|ele| ele / rhs))
+    fn div(self, rhs: f64) -> Self::Output {
+        Vec3::new(self.x / rhs, self.y / rhs, self.z / rhs)
     }
 }
 
-impl<'a, T, const N: usize> ops::Div<T> for &'a Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
-    /// Provides scalar division of [`&Vector<T, N>`]
+impl ops::DivAssign<f64> for Vec3 {
     #[inline]
-    fn div(self, rhs: T) -> Self::Output {
-        Vector::from(self.entries.map(|ele| ele / rhs))
+    fn div_assign(&mut self, rhs: f64) {
+        self.x /= rhs;
+        self.y /= rhs;
+        self.z /= rhs;
     }
 }
 
-impl<T, const N: usize> ops::DivAssign<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    #[inline]
-    fn div_assign(&mut self, rhs: T) {
-        self.entries.map(|e| e / rhs);
-    }
-}
+/// Type alias
+pub type Point = Vec3;
 
-/// Exported type alias for [`Vector<T, 3>`]
-pub type Point<T> = Vector<T, 3>;
-
-impl<T> Point<T>
-where
-    T: Numeric<T>,
-{
-    // Pretty sure cross product only exists in 3 (and 7) dimensions
+impl Point {
     /// Cross product with another 3D vector ([`Point<T>`])
     pub fn cross(&self, other: &Self) -> Self {
         // Ouch to cache
-        // TODO: make this better
-        Vector::from([
-            self.entries[1] * other.entries[2] - self.entries[2] * other.entries[1],
-            self.entries[2] * other.entries[0] - self.entries[0] * other.entries[2],
-            self.entries[0] * other.entries[1] - self.entries[1] * other.entries[0],
-        ])
+        Vec3::new(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x,
+        )
     }
 }
