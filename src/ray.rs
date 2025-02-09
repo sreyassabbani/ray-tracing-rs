@@ -28,8 +28,22 @@ impl<'a> Ray<'a> {
     }
 
     pub fn color(&self) -> Color {
+        if self.hit_sphere(&Point::new(0.0, 0.0, -1.0), 0.5) {
+            return Color::new(255, 0, 0);
+        }
+
         let unit_direction = self.dir().unit();
         let a = (unit_direction.y() + 1.0) * 0.5;
-        Color::new(255, 255, 255) * (1.0 - a) + Color::new(128, 179, 255) * a
+        let b = Color::new(128, 179, 255);
+        Color::new(255, 255, 255) * (1.0 - a) + b * a
+    }
+
+    fn hit_sphere(&self, center: &Point<f64>, radius: f64) -> bool {
+        let oc = center - self.origin();
+        let a = self.dir().norm_squared();
+        let b = -2.0 * oc.dot(self.dir());
+        let c = oc.norm_squared() - radius.powi(2);
+        let discrim = b.powi(2) - 4.0 * a * c;
+        discrim > 0.0
     }
 }
