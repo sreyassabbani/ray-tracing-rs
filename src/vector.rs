@@ -14,9 +14,9 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for i in 0..self.entries.len() - 1 {
-            write!(f, "{:?} ", self.entries[i])?;
+            write!(f, "{:?} ", self[i])?;
         }
-        write!(f, "{:?}", self.entries[self.entries.len() - 1])?;
+        write!(f, "{:?}", self[self.entries.len() - 1])?;
         Ok(())
     }
 }
@@ -29,10 +29,23 @@ where
         let mut collection = Self::_new();
 
         for (i, ele) in iter.into_iter().enumerate() {
-            collection.entries[i] = ele;
+            collection[i] = ele;
         }
 
         collection
+    }
+}
+
+impl<T, const N: usize> std::ops::Index<usize> for Vector<T, N> {
+    type Output = T;
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.entries[index]
+    }
+}
+
+impl<T, const N: usize> std::ops::IndexMut<usize> for Vector<T, N> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.entries[index]
     }
 }
 
@@ -264,15 +277,15 @@ where
     }
 
     pub fn x(&self) -> T {
-        self.entries[0]
+        self[0]
     }
 
     pub fn y(&self) -> T {
-        self.entries[1]
+        self[1]
     }
 
     pub fn z(&self) -> T {
-        self.entries[2]
+        self[2]
     }
 
     // Pretty sure cross product only exists in 3 (and 7) dimensions
@@ -281,9 +294,9 @@ where
         // Ouch to cache
         // TODO: make this better
         Vector::from([
-            self.entries[1] * other.entries[2] - self.entries[2] * other.entries[1],
-            self.entries[2] * other.entries[0] - self.entries[0] * other.entries[2],
-            self.entries[0] * other.entries[1] - self.entries[1] * other.entries[0],
+            self[1] * other[2] - self[2] * other[1],
+            self[2] * other[0] - self[0] * other[2],
+            self[0] * other[1] - self[1] * other[0],
         ])
     }
 }
