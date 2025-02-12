@@ -74,6 +74,7 @@ impl HitRecord {
     }
 }
 
+#[derive(Clone)]
 pub struct HittableList(Vec<Rc<dyn Hittable>>);
 
 impl HittableList {
