@@ -1,8 +1,10 @@
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::path::Path;
+use std::rc::Rc;
 
-use crate::ray::Ray;
+use crate::objects::Sphere;
+use crate::ray::{HittableList, Ray};
 use crate::vector::{Point, Vector};
 
 use env_logger;
@@ -41,10 +43,14 @@ pub fn ppm<T: AsRef<Path>>(path: T) -> Result<(), Box<dyn std::error::Error>> {
         - viewport_v / 2.0;
     let pixel00_loc = &(viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5);
 
+    let mut world = HittableList::new();
+    let sphere = Sphere::new(Point::new(0.0, 0.0, -1.0), 0.5);
+    let ground = Sphere::new(Point::new(0.0, -100.5, -1.0), 100.0);
+    world.add(Rc::new(sphere))?;
+    world.add(Rc::new(ground))?;
+
     // P3 PPM header
     writeln!(file, "P3")?;
-    let image_height = 225;
-    let image_width = 400;
     writeln!(file, "{} {}", image_width, image_height)?;
     writeln!(file, "255")?; // The maximum color value for RGB channels in P3
 
@@ -58,7 +64,7 @@ pub fn ppm<T: AsRef<Path>>(path: T) -> Result<(), Box<dyn std::error::Error>> {
             let ray_direction = pixel_center.clone() - camera_center.clone();
             let r = Ray::new(&camera_center, &ray_direction);
 
-            let pixel_color = r.color();
+            let pixel_color = r.color(&world);
             writeln!(file, "{}", pixel_color)?;
         }
     }

@@ -1,4 +1,5 @@
 use crate::ray::{HitRecord, Hittable, Ray};
+use crate::utils::interval::Interval;
 use crate::vector::Point;
 
 pub struct Sphere {
@@ -13,7 +14,7 @@ impl Sphere {
 }
 
 impl Hittable for Sphere {
-    fn hit(&self, t_min: f64, t_max: f64, ray: &Ray) -> Option<HitRecord> {
+    fn hit(&self, ray_t: Interval, ray: &Ray) -> Option<HitRecord> {
         let oc = &self.center - ray.origin();
         let a = ray.dir().norm_squared();
         let h = oc.dot(ray.dir());
@@ -23,16 +24,21 @@ impl Hittable for Sphere {
             return None;
         }
         let t = (h - discrim.sqrt()) / a;
-        if t < t_min || t > t_max {
+        if !ray_t.contains_inclusive(t) {
             let t = (h + discrim.sqrt()) / a;
-            if t < t_min || t > t_max {
+            if !ray_t.contains_inclusive(t) {
                 return None;
             }
         }
+
+        // Even though the vector seems to emanate from the center of the circle, it is still a normal vector to the sphere's surface. Keep that in mind.
+        let normal = (&ray.at(t) - &self.center) / self.radius;
         Some(HitRecord {
             t,
             point: ray.at(t),
-            normal: (&ray.at(t) - &self.center) / self.radius,
+            front_face: ray.dir().dot(&normal) > 0.0,
+            // Move normal into [`HitRecord`]
+            normal,
         })
     }
 }
