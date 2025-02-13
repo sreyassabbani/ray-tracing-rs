@@ -1,6 +1,6 @@
 //! Module defining the [`Ray`] struct and the [`Hittable`] trait
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::color::Color;
 use crate::utils::interval::Interval;
@@ -78,7 +78,7 @@ impl HitRecord {
 }
 
 #[derive(Clone)]
-pub struct HittableList(Vec<Rc<dyn Hittable>>);
+pub struct HittableList(Vec<Arc<dyn Hittable>>);
 
 impl HittableList {
     /// Create a new [`HittableList`]
@@ -95,8 +95,8 @@ impl HittableList {
     /// world.add(Rc::new(sphere))?;
     /// world.add(Rc::new(ground))?;
     /// ```
-    pub fn add(&mut self, object: Rc<dyn Hittable>) -> Result<(), Error> {
-        self.0.push(Rc::clone(&object));
+    pub fn add(&mut self, object: Arc<dyn Hittable>) -> Result<(), Error> {
+        self.0.push(Arc::clone(&object));
         Ok(())
     }
 }
@@ -119,7 +119,7 @@ impl Hittable for HittableList {
     }
 }
 
-pub trait Hittable {
+pub trait Hittable: Send + Sync {
     fn hit(&self, ray_t: Interval, ray: &Ray) -> Option<HitRecord>;
 }
 

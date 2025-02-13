@@ -1,7 +1,7 @@
 //! Module exposing the API for [`Camera`], [`ImageOptions`], [`ViewportOptions`]
 //! Contains logic for writing in PPM format
 
-use std::fs::OpenOptions;
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::Path;
 
@@ -9,6 +9,8 @@ use env_logger;
 use log::info;
 
 use thiserror::Error;
+
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 use crate::color::Color;
 use crate::ray::{HittableList, Ray};
@@ -126,11 +128,27 @@ impl ComputedData {
 }
 
 #[derive(Clone)]
+pub(crate) struct RenderOptions {
+    parallel: bool,
+}
+
+impl RenderOptions {
+    pub fn new() -> Self {
+        Self { parallel: true }
+    }
+
+    pub(crate) fn parallel(&mut self, is_parallel: bool) {
+        self.parallel = is_parallel;
+    }
+}
+
+#[derive(Clone)]
 pub struct Camera {
     center: Point<f64>,
     focal_length: f64,
     viewport_options: ViewportOptions,
     image_options: ImageOptions,
+    render_options: RenderOptions,
     computed_data: ComputedData,
     world: HittableList,
 }
@@ -150,14 +168,21 @@ impl Camera {
         let computed_data =
             ComputedData::new(&viewport_options, &image_options, &center, focal_length);
 
+        let render_options = RenderOptions::new();
+
         Ok(Self {
             center,
             focal_length,
             viewport_options,
             image_options,
+            render_options,
             computed_data,
             world,
         })
+    }
+
+    pub(crate) fn set_render_options(&mut self, render_options: RenderOptions) {
+        self.render_options = render_options;
     }
 
     pub fn render<T: AsRef<Path>>(&self, path: T) -> Result<(), Box<dyn std::error::Error>> {
@@ -170,6 +195,20 @@ impl Camera {
         // Set up logger
         env_logger::init();
 
+        self.write_ppm_p3_header(&mut file)?;
+
+        if self.render_options.parallel {
+            self.parallelized_render(&mut file)?;
+        } else {
+            self.sequential_render(&mut file)?;
+        }
+
+        Ok(())
+    }
+
+    /// Internal function to write P3 PPM header
+    #[inline]
+    fn write_ppm_p3_header(&self, file: &mut fs::File) -> Result<(), Box<dyn std::error::Error>> {
         // P3 PPM header
         writeln!(file, "P3")?;
         writeln!(
@@ -179,30 +218,36 @@ impl Camera {
         )?;
         writeln!(file, "255")?; // The maximum color value for RGB channels in P3
 
+        Ok(())
+    }
+
+    /// Internal function to handle rendering with [`Rayon`]
+    #[inline]
+    fn parallelized_render(&self, file: &mut fs::File) -> Result<(), Box<dyn std::error::Error>> {
+        // Write the pixel data
+        for j in 0..self.image_options.height {
+            info!("Scanlines remaining: {}", self.image_options.height - j);
+            io::stdout().flush().unwrap();
+            let row_pixels: Vec<_> = (0..self.image_options.width)
+                .into_par_iter()
+                .map(|i| self.pixel_color_at(i, j))
+                .collect();
+            for pixel_color in row_pixels {
+                writeln!(file, "{}", pixel_color)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Internal function to handle sequential rendering. Mainly used for benchmarking parallelized render
+    #[inline]
+    fn sequential_render(&self, file: &mut fs::File) -> Result<(), Box<dyn std::error::Error>> {
         // Write the pixel data
         for j in 0..self.image_options.height {
             info!("Scanlines remaining: {}", self.image_options.height - j);
             io::stdout().flush().unwrap();
             for i in 0..self.image_options.width {
-                let mut pixel_color = Color::new(0.0, 0.0, 0.0);
-
-                use AntialiasOptions::*;
-                match self.image_options.antialias {
-                    Disabled => {
-                        let pixel_center = self.get_pixel_center_coordinates(i, j);
-                        let ray_direction = &pixel_center - &self.center;
-                        let r = Ray::new(&self.center, ray_direction);
-                        pixel_color += r.color(&self.world);
-                    }
-                    Enabled(samples_per_pixel) => {
-                        for _ in 0..samples_per_pixel {
-                            let r = self.get_antialiasing_ray(i, j);
-                            pixel_color += r.color(&self.world)
-                                * self.computed_data.pixel_samples_scale.unwrap();
-                        }
-                    }
-                }
-
+                let pixel_color = self.pixel_color_at(i, j);
                 writeln!(file, "{}", pixel_color)?;
             }
         }
@@ -210,6 +255,30 @@ impl Camera {
         Ok(())
     }
 
+    #[inline]
+    fn pixel_color_at(&self, i: u32, j: u32) -> Color {
+        let mut pixel_color = Color::new(0.0, 0.0, 0.0);
+
+        use AntialiasOptions::*;
+        match self.image_options.antialias {
+            Disabled => {
+                let pixel_center = self.get_pixel_center_coordinates(i, j);
+                let ray_direction = &pixel_center - &self.center;
+                let r = Ray::new(&self.center, ray_direction);
+                pixel_color += r.color(&self.world);
+            }
+            Enabled(samples_per_pixel) => {
+                for _ in 0..samples_per_pixel {
+                    let r = self.get_antialiasing_ray(i, j);
+                    pixel_color +=
+                        r.color(&self.world) * self.computed_data.pixel_samples_scale.unwrap();
+                }
+            }
+        }
+        pixel_color
+    }
+
+    #[inline]
     fn get_pixel_center_coordinates(&self, i: u32, j: u32) -> Point<f64> {
         &self.computed_data.pixel00_loc
             + &(&self.computed_data.pixel_delta_u * i as f64)
@@ -217,6 +286,7 @@ impl Camera {
     }
 
     /// Gives a [`Ray`] that is nearby the neighborhood of `i` and `j`. Specifically, at most 0.5 away from real location
+    #[inline]
     fn get_antialiasing_ray(&self, i: u32, j: u32) -> Ray {
         let offset = Self::sample_square();
         // let point_to = self.get_pixel_center_coordinates(i, j) - offset;
@@ -227,6 +297,7 @@ impl Camera {
     }
 
     /// Internal method for generating a random vector inside of a unit square
+    #[inline]
     fn sample_square() -> Vector<f64, 3> {
         Vector::new(rand::random(-0.5, 0.5), rand::random(-0.5, 0.5), 0.0)
     }
