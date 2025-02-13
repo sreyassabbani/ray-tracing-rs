@@ -241,7 +241,7 @@ where
     }
 }
 
-impl<'a, T, const N: usize> ops::Div<T> for &'a Vector<T, N>
+impl<T, const N: usize> ops::Div<T> for &Vector<T, N>
 where
     T: Numeric<T>,
 {

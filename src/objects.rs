@@ -1,3 +1,8 @@
+//! Module defining objects to be held inside of a world, which is of type [`HittableList`]
+//!
+//! Contains
+//! * [`Sphere`]
+
 use crate::ray::{HitRecord, Hittable, Ray};
 use crate::utils::interval::Interval;
 use crate::vector::Point;
