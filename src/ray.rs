@@ -8,24 +8,27 @@ use crate::vector::{Point, Vector};
 
 use thiserror::Error;
 
+/// A struct for representing rays
+///
+/// Note: `origin` is a reference, whereas `dir` is an owned value. This is a very intentional design decision (that could be bad).
 pub struct Ray<'a> {
     origin: &'a Point<f64>,
-    dir: &'a Vector<f64, 3>,
+    dir: Vector<f64, 3>,
 }
 
 impl<'a> Ray<'a> {
     /// Creates a new [`Ray`].
     #[inline]
-    pub fn new(origin: &'a Point<f64>, dir: &'a Vector<f64, 3>) -> Self {
+    pub fn new(origin: &'a Point<f64>, dir: Vector<f64, 3>) -> Self {
         Self { origin, dir }
     }
 
     pub fn at(&self, t: f64) -> Point<f64> {
-        self.origin + &(self.dir * t)
+        self.origin + &(&self.dir * t)
     }
 
     pub fn origin(&self) -> &Point<f64> {
-        &self.origin
+        self.origin
     }
 
     pub fn dir(&self) -> &Vector<f64, 3> {
@@ -37,16 +40,16 @@ impl<'a> Ray<'a> {
             Some(record) => {
                 let normal = record.normal;
                 return Color::new(
-                    ((normal.x() + 1.0) * 127.5) as u8,
-                    ((normal.y() + 1.0) * 127.5) as u8,
-                    ((normal.z() + 1.0) * 127.5) as u8,
+                    (normal.x() + 1.0) * 0.5,
+                    (normal.y() + 1.0) * 0.5,
+                    (normal.z() + 1.0) * 0.5,
                 );
             }
             None => {
                 let unit_direction = self.dir().unit();
                 let a = (unit_direction.y() + 1.0) * 0.5;
-                let b = Color::new(128, 179, 255);
-                Color::new(255, 255, 255) * (1.0 - a) + b * a
+                let b = Color::new(0.5, 0.70196, 1.0);
+                Color::new(1.0, 1.0, 1.0) * (1.0 - a) + b * a
             }
         }
     }

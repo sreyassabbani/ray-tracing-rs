@@ -1,42 +1,39 @@
+//! Module containing [`Color`] and logic for operations with it.
+
 use std::fmt;
 use std::ops;
 
 #[derive(Clone)]
 pub struct Color {
-    r: u8,
-    g: u8,
-    b: u8,
+    r: f64,
+    g: f64,
+    b: f64,
 }
 
 impl Color {
-    pub fn new(r: u8, g: u8, b: u8) -> Self {
+    pub fn new(r: f64, g: f64, b: f64) -> Self {
         Color { r, g, b }
-    }
-}
-
-impl ops::Mul<u8> for Color {
-    type Output = Color;
-    fn mul(self, rhs: u8) -> Self::Output {
-        Color::new(self.r * rhs, self.g * rhs, self.b * rhs)
     }
 }
 
 impl ops::Mul<f64> for Color {
     type Output = Color;
     fn mul(self, rhs: f64) -> Self::Output {
-        // TODO: please make this better
-        Color::new(
-            (self.r as f64 * rhs) as u8,
-            (self.g as f64 * rhs) as u8,
-            (self.b as f64 * rhs) as u8,
-        )
+        Color::new(self.r * rhs, self.g * rhs, self.b * rhs)
     }
 }
 
-impl ops::Add<u8> for Color {
+impl ops::Add<f64> for Color {
     type Output = Color;
-    fn add(self, rhs: u8) -> Self::Output {
+    fn add(self, rhs: f64) -> Self::Output {
         Color::new(self.r + rhs, self.g + rhs, self.b + rhs)
+    }
+}
+
+impl ops::Div<f64> for Color {
+    type Output = Color;
+    fn div(self, rhs: f64) -> Self::Output {
+        Color::new(self.r / rhs, self.g / rhs, self.b / rhs)
     }
 }
 
@@ -47,10 +44,21 @@ impl ops::Add<Color> for Color {
     }
 }
 
+impl ops::AddAssign<Color> for Color {
+    fn add_assign(&mut self, rhs: Color) {
+        self.r += rhs.r;
+        self.g += rhs.g;
+        self.b += rhs.b;
+    }
+}
+
 impl fmt::Display for Color {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // P3 PPM format
-        write!(f, "{} {} {}", self.r, self.g, self.b)?;
-        Ok(())
+        let r = (255.0 * self.r.clamp(0.0, 1.0)) as u8;
+        let g = (255.0 * self.g.clamp(0.0, 1.0)) as u8;
+        let b = (255.0 * self.b.clamp(0.0, 1.0)) as u8;
+
+        write!(f, "{} {} {}", r, g, b)
     }
 }

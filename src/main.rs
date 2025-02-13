@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     world.add(Rc::new(ground))?;
 
     // Output image config, aspect ratio 16:9
-    let image = ImageOptions::new(400, 225);
+    let image = ImageOptions::new(400, 225).enable_antialias(50);
 
     // Viewport config
     let viewport = ViewportOptions::new(image.aspect_ratio() * 2.0, 2.0);

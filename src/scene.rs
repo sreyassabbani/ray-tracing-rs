@@ -1,34 +1,71 @@
+//! Module exposing the API for [`Camera`], [`ImageOptions`], [`ViewportOptions`]
+//! Contains logic for writing in PPM format
+
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::path::Path;
 
 use env_logger;
 use log::info;
+
 use thiserror::Error;
 
+use crate::color::Color;
 use crate::ray::{HittableList, Ray};
+use crate::utils::rand;
 use crate::vector::{Point, Vector};
 
+/// [`ImageOptions`] can be used to configure a [`Camera`].
+///
+/// * when initializing, the image aspect ratio needs to be the same as the viewport aspect ratio or `Camera::new` will fail.
 #[derive(Copy, Clone, Debug)]
 pub struct ImageOptions {
-    pub(super) width: u32,
-    pub(super) height: u32,
+    width: u32,
+    height: u32,
+    antialias: AntialiasOptions,
+}
+
+/// Can be used as additional configuration for [`ImageOptions`]
+///
+/// ```rs
+/// // Enable antialiasing with 10 samples per pixel
+/// let image = ImageOptions::new(width, height).enable_antialias(10);
+/// ```
+#[derive(Debug, Clone, Copy)]
+enum AntialiasOptions {
+    Disabled,
+    Enabled(u32),
 }
 
 impl ImageOptions {
     pub fn new(width: u32, height: u32) -> Self {
-        Self { width, height }
+        Self {
+            width,
+            height,
+            antialias: AntialiasOptions::Disabled,
+        }
     }
 
     pub fn aspect_ratio(&self) -> f64 {
         self.width as f64 / self.height as f64
     }
+
+    /// Use for smoothening rough edges and color differences; need to specify samples per pixel
+    ///
+    /// ```rs
+    /// // Enable antialiasing with 10 samples per pixel
+    /// let image = ImageOptions::new(width, height).enable_antialias(10);
+    /// ```
+    pub fn enable_antialias(mut self, samples_per_pixel: u32) -> Self {
+        self.antialias = AntialiasOptions::Enabled(samples_per_pixel);
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct ViewportOptions {
-    pub(super) width: f64,
-    pub(super) height: f64,
+    width: f64,
+    height: f64,
 }
 
 impl ViewportOptions {
@@ -41,12 +78,60 @@ impl ViewportOptions {
     }
 }
 
+/// Internal struct for handling information about the viewport
+/// * Not to be confused with [`ViewportOptions`], which is what the user may configure. The values of everything in this struct is completely determined by [`ViewportOptions`]
+#[derive(Clone)]
+struct ComputedData {
+    u: Vector<f64, 3>,
+    v: Vector<f64, 3>,
+    pixel_delta_u: Vector<f64, 3>,
+    pixel_delta_v: Vector<f64, 3>,
+    viewport_upper_left: Point<f64>,
+    pixel00_loc: Point<f64>,
+    pixel_samples_scale: Option<f64>,
+}
+
+impl ComputedData {
+    fn new(
+        viewport_options: &ViewportOptions,
+        image_options: &ImageOptions,
+        center: &Point<f64>,
+        focal_length: f64,
+    ) -> Self {
+        let u = Vector::from([viewport_options.width, 0.0, 0.0]);
+        let v = Vector::from([0.0, -viewport_options.height, 0.0]);
+
+        let pixel_delta_u = &u / image_options.width as f64;
+        let pixel_delta_v = &v / image_options.height as f64;
+
+        let viewport_upper_left =
+            center - &Vector::from([0.0, 0.0, focal_length]) - &u / 2.0 - &v / 2.0;
+        let pixel00_loc = &viewport_upper_left + &((&pixel_delta_u + &pixel_delta_v) * 0.5);
+
+        let pixel_samples_scale = match image_options.antialias {
+            AntialiasOptions::Disabled => None,
+            AntialiasOptions::Enabled(samples_per_pixel) => Some(1.0 / samples_per_pixel as f64),
+        };
+
+        Self {
+            u,
+            v,
+            pixel_delta_u,
+            pixel_delta_v,
+            viewport_upper_left,
+            pixel00_loc,
+            pixel_samples_scale,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Camera {
     center: Point<f64>,
     focal_length: f64,
     viewport_options: ViewportOptions,
     image_options: ImageOptions,
+    computed_data: ComputedData,
     world: HittableList,
 }
 
@@ -61,11 +146,16 @@ impl Camera {
         if image_options.aspect_ratio() != viewport_options.aspect_ratio() {
             return Err(Error::MismatchedImageViewportAspectRatios);
         }
+
+        let computed_data =
+            ComputedData::new(&viewport_options, &image_options, &center, focal_length);
+
         Ok(Self {
             center,
             focal_length,
             viewport_options,
             image_options,
+            computed_data,
             world,
         })
     }
@@ -79,18 +169,6 @@ impl Camera {
 
         // Set up logger
         env_logger::init();
-
-        let viewport_u = &Vector::from([self.viewport_options.width, 0.0, 0.0]);
-        let viewport_v = &Vector::from([0.0, -self.viewport_options.height, 0.0]);
-
-        let pixel_delta_u = &(viewport_u / self.image_options.width as f64);
-        let pixel_delta_v = &(viewport_v / self.image_options.height as f64);
-
-        let viewport_upper_left = &self.center
-            - &Vector::from([0.0, 0.0, self.focal_length])
-            - viewport_u / 2.0
-            - viewport_v / 2.0;
-        let pixel00_loc = &(viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5);
 
         // P3 PPM header
         writeln!(file, "P3")?;
@@ -106,17 +184,51 @@ impl Camera {
             info!("Scanlines remaining: {}", self.image_options.height - j);
             io::stdout().flush().unwrap();
             for i in 0..self.image_options.width {
-                let pixel_center =
-                    pixel00_loc + &(pixel_delta_u * i as f64) + (pixel_delta_v * j as f64);
-                let ray_direction = pixel_center.clone() - self.center.clone();
-                let r = Ray::new(&self.center, &ray_direction);
+                let mut pixel_color = Color::new(0.0, 0.0, 0.0);
 
-                let pixel_color = r.color(&self.world);
+                use AntialiasOptions::*;
+                match self.image_options.antialias {
+                    Disabled => {
+                        let pixel_center = self.get_pixel_center_coordinates(i, j);
+                        let ray_direction = &pixel_center - &self.center;
+                        let r = Ray::new(&self.center, ray_direction);
+                        pixel_color += r.color(&self.world);
+                    }
+                    Enabled(samples_per_pixel) => {
+                        for _ in 0..samples_per_pixel {
+                            let r = self.get_antialiasing_ray(i, j);
+                            pixel_color += r.color(&self.world)
+                                * self.computed_data.pixel_samples_scale.unwrap();
+                        }
+                    }
+                }
+
                 writeln!(file, "{}", pixel_color)?;
             }
         }
 
         Ok(())
+    }
+
+    fn get_pixel_center_coordinates(&self, i: u32, j: u32) -> Point<f64> {
+        &self.computed_data.pixel00_loc
+            + &(&self.computed_data.pixel_delta_u * i as f64)
+            + (&self.computed_data.pixel_delta_v * j as f64)
+    }
+
+    /// Gives a [`Ray`] that is nearby the neighborhood of `i` and `j`. Specifically, at most 0.5 away from real location
+    fn get_antialiasing_ray(&self, i: u32, j: u32) -> Ray {
+        let offset = Self::sample_square();
+        // let point_to = self.get_pixel_center_coordinates(i, j) - offset;
+        let point_to = &self.computed_data.pixel00_loc
+            + &(&self.computed_data.pixel_delta_u * (i as f64 + offset.x()))
+            + (&self.computed_data.pixel_delta_v * (j as f64 + offset.y()));
+        Ray::new(&self.center, point_to)
+    }
+
+    /// Internal method for generating a random vector inside of a unit square
+    fn sample_square() -> Vector<f64, 3> {
+        Vector::new(rand::random(-0.5, 0.5), rand::random(-0.5, 0.5), 0.0)
     }
 }
 
