@@ -10,7 +10,7 @@ use log::info;
 
 use thiserror::Error;
 
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::*;
 
 use crate::color::Color;
 use crate::ray::{HittableList, Ray};
@@ -52,14 +52,22 @@ impl ImageOptions {
         self.width as f64 / self.height as f64
     }
 
-    /// Use for smoothening rough edges and color differences; need to specify samples per pixel
+    /// Use for smoothening rough edges and color differences.
+    ///
+    /// Specify samples per pixel (SPP). Specifying 0 will result in [`AntialiasOptions::Disabled`], which is the default for [`ImageOptions`]
+    ///
+    /// * Antialiasing is off by default
     ///
     /// ```rs
     /// // Enable antialiasing with 10 samples per pixel
-    /// let image = ImageOptions::new(width, height).enable_antialias(10);
+    /// let image = ImageOptions::new(width, height).antialias(10);
     /// ```
-    pub fn enable_antialias(mut self, samples_per_pixel: u32) -> Self {
-        self.antialias = AntialiasOptions::Enabled(samples_per_pixel);
+    pub fn antialias(mut self, spp: u32) -> Self {
+        if spp == 0 {
+            self.antialias = AntialiasOptions::Disabled;
+        } else {
+            self.antialias = AntialiasOptions::Enabled(spp);
+        }
         self
     }
 }
@@ -128,17 +136,30 @@ impl ComputedData {
 }
 
 #[derive(Clone)]
-pub(crate) struct RenderOptions {
-    parallel: bool,
+pub struct RenderOptions {
+    parallel: ParallelOptions,
+}
+
+#[derive(Clone, Debug)]
+pub enum ParallelOptions {
+    /// Render all of the grid in parallel. Write everything to the file afterwards, sequentially.
+    AllAtOnce,
+    /// Render the first row, write to the file. Render the second row, write to the file, and so on.
+    ByRows,
+    /// Render in series (sequentially). Once pixel at a time and write immediately after being computed.
+    Series,
 }
 
 impl RenderOptions {
     pub fn new() -> Self {
-        Self { parallel: true }
+        Self {
+            parallel: ParallelOptions::ByRows,
+        }
     }
 
-    pub(crate) fn parallel(&mut self, is_parallel: bool) {
-        self.parallel = is_parallel;
+    pub fn parallel(mut self, config: ParallelOptions) -> Self {
+        self.parallel = config;
+        self
     }
 }
 
@@ -154,6 +175,7 @@ pub struct Camera {
 }
 
 impl Camera {
+    /// Can only call once
     pub fn new(
         center: Point<f64>,
         focal_length: f64,
@@ -170,6 +192,9 @@ impl Camera {
 
         let render_options = RenderOptions::new();
 
+        // Set up logger only once
+        env_logger::init();
+
         Ok(Self {
             center,
             focal_length,
@@ -181,8 +206,21 @@ impl Camera {
         })
     }
 
-    pub(crate) fn set_render_options(&mut self, render_options: RenderOptions) {
+    pub fn update_image_options(&mut self, image_options: ImageOptions) {
+        self.image_options = image_options;
+
+        // Update computed data -- REALLY BAD -- TODO refactor
+        self.computed_data.pixel_samples_scale = match image_options.antialias {
+            AntialiasOptions::Disabled => None,
+            AntialiasOptions::Enabled(samples_per_pixel) => Some(1.0 / samples_per_pixel as f64),
+        };
+    }
+
+    // Need to not make public
+    pub fn update_render_options(&mut self, render_options: RenderOptions) {
         self.render_options = render_options;
+
+        // Look at `Self::update_image_options`, implement logic like that as necessary
     }
 
     pub fn render<T: AsRef<Path>>(&self, path: T) -> Result<(), Box<dyn std::error::Error>> {
@@ -192,16 +230,14 @@ impl Camera {
             .create(true)
             .open(path)?;
 
-        // Set up logger
-        env_logger::init();
-
         self.write_ppm_p3_header(&mut file)?;
 
-        if self.render_options.parallel {
-            self.parallelized_render(&mut file)?;
-        } else {
-            self.sequential_render(&mut file)?;
-        }
+        use ParallelOptions::*;
+        match self.render_options.parallel {
+            AllAtOnce => self.render_parallel_all(&mut file)?,
+            ByRows => self.render_parallel_by_rows(&mut file)?,
+            Series => self.render_sequential(&mut file)?,
+        };
 
         Ok(())
     }
@@ -221,17 +257,52 @@ impl Camera {
         Ok(())
     }
 
-    /// Internal function to handle rendering with [`Rayon`]
+    /// Internal inlined function that is called when `render_options`: [`RenderOptions`] of [`Camera`] has the `parallel` field set to [`ParallelOptions::AllAtOnce`]
     #[inline]
-    fn parallelized_render(&self, file: &mut fs::File) -> Result<(), Box<dyn std::error::Error>> {
+    fn render_parallel_all(&self, file: &mut fs::File) -> Result<(), Box<dyn std::error::Error>> {
+        let mut pixels = vec![
+            Color::new(0.0, 0.0, 0.0);
+            (self.image_options.height * self.image_options.width) as usize
+        ];
+
+        pixels.par_iter_mut().enumerate().for_each(|(i, v)| {
+            let x = (i as u32) % self.image_options.width;
+            let y = (i as u32) / self.image_options.width;
+            *v = self.pixel_color_at(x, y);
+        });
+
+        info!("Finished calculations!");
+
         // Write the pixel data
+        for i in 0..(pixels.len() as u32) {
+            if i % self.image_options.width == 0 {
+                info!(
+                    "Scanlines remaining to write: {}",
+                    self.image_options.height - (i / self.image_options.width)
+                );
+            }
+            writeln!(file, "{}", pixels[i as usize])?;
+        }
+        Ok(())
+    }
+
+    /// Internal inlined function that is called when `render_options`: [`RenderOptions`] of [`Camera`] has the `parallel` field set to [`ParallelOptions::ByRows`]
+    #[inline]
+    fn render_parallel_by_rows(
+        &self,
+        file: &mut fs::File,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         for j in 0..self.image_options.height {
             info!("Scanlines remaining: {}", self.image_options.height - j);
             io::stdout().flush().unwrap();
+
+            // Calculate pixel data
             let row_pixels: Vec<_> = (0..self.image_options.width)
                 .into_par_iter()
                 .map(|i| self.pixel_color_at(i, j))
                 .collect();
+
+            // Write the pixel data
             for pixel_color in row_pixels {
                 writeln!(file, "{}", pixel_color)?;
             }
@@ -239,12 +310,15 @@ impl Camera {
         Ok(())
     }
 
-    /// Internal function to handle sequential rendering. Mainly used for benchmarking parallelized render
+    /// Internal inlined function that is called when `render_options`: [`RenderOptions`] of [`Camera`] has the `parallel` field set to [`ParallelOptions::Series`]
     #[inline]
-    fn sequential_render(&self, file: &mut fs::File) -> Result<(), Box<dyn std::error::Error>> {
+    fn render_sequential(&self, file: &mut fs::File) -> Result<(), Box<dyn std::error::Error>> {
         // Write the pixel data
         for j in 0..self.image_options.height {
-            info!("Scanlines remaining: {}", self.image_options.height - j);
+            info!(
+                "Scanlines remaining: {}",
+                self.image_options.height - (j as u32 / self.image_options.width)
+            );
             io::stdout().flush().unwrap();
             for i in 0..self.image_options.width {
                 let pixel_color = self.pixel_color_at(i, j);
