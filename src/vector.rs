@@ -1,6 +1,6 @@
 //! Module defining [`Vector<T, N>`], and variants [`Point<T, 3>`], ...
 
-use crate::number::Numeric;
+use crate::{number::Numeric, utils::rand};
 use std::{fmt, ops};
 
 #[derive(Clone)]
@@ -64,8 +64,8 @@ where
     /// An internal method for instantiating a [`Vector<T, N>`] type.
     pub(super) fn _new() -> Self {
         Self {
-            // `core::array::from_fn` avoids `Copy`
-            entries: Box::new(core::array::from_fn(|_| T::default())),
+            // `std::array::from_fn` avoids `Copy` (? I don't know why I used this)
+            entries: Box::new(std::array::from_fn(|_| T::default())),
         }
     }
 
@@ -94,6 +94,44 @@ where
     #[inline]
     pub fn unit(&self) -> Self {
         self / self.norm()
+    }
+}
+
+impl Vector<f64, 3> {
+    #[inline]
+    pub fn random() -> Self {
+        Self {
+            entries: Box::new([rand::random(); 3]),
+        }
+    }
+
+    #[inline]
+    pub fn random_range(min: f64, max: f64) -> Self {
+        Self {
+            // I believe I ran into this issue before where a non-deterministic function only gets called once, but I still spent way too long debugging this
+            entries: Box::new(std::array::from_fn(|_| rand::random_range(min, max))),
+        }
+    }
+
+    #[inline]
+    pub fn random_unit() -> Self {
+        loop {
+            let p = Self::random_range(-1.0, 1.0);
+            let nsq = p.norm();
+            if 1e-160 < nsq && nsq <= 1.0 {
+                return p / nsq;
+            }
+        }
+    }
+
+    #[inline]
+    pub fn random_on_hemisphere(normal: &Vector<f64, 3>) -> Self {
+        let on_unit_sphere = Self::random_unit();
+        if on_unit_sphere.dot(normal) > 0.0 {
+            return on_unit_sphere;
+        } else {
+            return on_unit_sphere * -1.0;
+        }
     }
 }
 

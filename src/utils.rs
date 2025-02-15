@@ -13,9 +13,16 @@ pub fn radians_to_degrees(radians: f64) -> f64 {
 pub mod rand {
     use rand::prelude::*;
 
-    pub fn random(min: f64, max: f64) -> f64 {
+    pub fn random_range(min: f64, max: f64) -> f64 {
+        // Might be inefficient, but I couldn't find an easy way around this
         let mut rng = rand::rng();
         rng.random_range(min..max)
+    }
+    /// Return a random real in [0.0, 1.0)
+    pub fn random() -> f64 {
+        // Might be inefficient, but I couldn't find an easy way around this
+        let mut rng = rand::rng();
+        rng.random_range(0.0..1.0)
     }
 }
 

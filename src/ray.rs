@@ -11,6 +11,7 @@ use thiserror::Error;
 /// A struct for representing rays
 ///
 /// Note: `origin` is a reference, whereas `dir` is an owned value. This is a very intentional design decision (that could be bad).
+#[derive(Clone)]
 pub struct Ray<'a> {
     origin: &'a Point<f64>,
     dir: Vector<f64, 3>,
@@ -23,28 +24,40 @@ impl<'a> Ray<'a> {
         Self { origin, dir }
     }
 
+    #[inline]
     pub fn at(&self, t: f64) -> Point<f64> {
         self.origin + &(&self.dir * t)
     }
 
+    #[inline]
     pub fn origin(&self) -> &Point<f64> {
         self.origin
     }
 
+    #[inline]
     pub fn dir(&self) -> &Vector<f64, 3> {
         &self.dir
     }
 
-    pub fn color(&self, world: &HittableList) -> Color {
-        match world.hit(Interval::new(0.0, f64::MAX), self) {
+    pub fn color(&self, world: &HittableList, bounce: u32) -> Color {
+        // Limit the number of child rays
+        if bounce == 0 {
+            return Color::new(0.0, 0.0, 0.0);
+        }
+
+        // Use 0.001 instead of 0.0 to avoid shadow acne
+        match world.hit(Interval::new(0.001, f64::MAX), self) {
             Some(record) => {
-                let normal = record.normal;
-                return Color::new(
-                    (normal.x() + 1.0) * 0.5,
-                    (normal.y() + 1.0) * 0.5,
-                    (normal.z() + 1.0) * 0.5,
-                );
+                // Naive implementation:
+                // let direction = &record.normal + &Vector::random_on_hemisphere(&record.normal);
+
+                // Lambertian reflection
+                let direction = &record.normal + &Vector::random_unit();
+
+                let scattered_ray = Ray::new(&record.point, direction);
+                return scattered_ray.color(world, bounce - 1) * 0.5;
             }
+            // Render the sky instead
             None => {
                 let unit_direction = self.dir().unit();
                 let a = (unit_direction.y() + 1.0) * 0.5;

@@ -153,7 +153,7 @@ pub enum ParallelOptions {
 impl RenderOptions {
     pub fn new() -> Self {
         Self {
-            parallel: ParallelOptions::ByRows,
+            parallel: ParallelOptions::AllAtOnce,
         }
     }
 
@@ -339,13 +339,14 @@ impl Camera {
                 let pixel_center = self.get_pixel_center_coordinates(i, j);
                 let ray_direction = &pixel_center - &self.center;
                 let r = Ray::new(&self.center, ray_direction);
-                pixel_color += r.color(&self.world);
+                pixel_color += r.color(&self.world, 50);
             }
             Enabled(samples_per_pixel) => {
                 for _ in 0..samples_per_pixel {
                     let r = self.get_antialiasing_ray(i, j);
+                    // Should never panic
                     pixel_color +=
-                        r.color(&self.world) * self.computed_data.pixel_samples_scale.unwrap();
+                        r.color(&self.world, 50) * self.computed_data.pixel_samples_scale.unwrap();
                 }
             }
         }
@@ -373,7 +374,11 @@ impl Camera {
     /// Internal method for generating a random vector inside of a unit square
     #[inline]
     fn sample_square() -> Vector<f64, 3> {
-        Vector::new(rand::random(-0.5, 0.5), rand::random(-0.5, 0.5), 0.0)
+        Vector::new(
+            rand::random_range(-0.5, 0.5),
+            rand::random_range(-0.5, 0.5),
+            0.0,
+        )
     }
 }
 

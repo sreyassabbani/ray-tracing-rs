@@ -23,6 +23,21 @@ impl ops::Mul<f64> for Color {
     }
 }
 
+impl ops::Mul<Color> for Color {
+    type Output = Color;
+    fn mul(self, rhs: Color) -> Self::Output {
+        Color::new(self.r * rhs.r, self.g * rhs.g, self.b * rhs.b)
+    }
+}
+
+impl ops::MulAssign<f64> for Color {
+    fn mul_assign(&mut self, rhs: f64) {
+        self.r *= rhs;
+        self.g *= rhs;
+        self.b *= rhs;
+    }
+}
+
 impl ops::Add<f64> for Color {
     type Output = Color;
     fn add(self, rhs: f64) -> Self::Output {
@@ -54,10 +69,17 @@ impl ops::AddAssign<Color> for Color {
 
 impl fmt::Display for Color {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Pray compiler optimizes this
+        let linear_to_gamma = |e: f64| if e > 0.0 { e.sqrt() } else { 0.0 };
+
+        let r = linear_to_gamma(self.r);
+        let g = linear_to_gamma(self.g);
+        let b = linear_to_gamma(self.b);
+
         // P3 PPM format
-        let r = (255.0 * self.r.clamp(0.0, 1.0)) as u8;
-        let g = (255.0 * self.g.clamp(0.0, 1.0)) as u8;
-        let b = (255.0 * self.b.clamp(0.0, 1.0)) as u8;
+        let r = (255.0 * r.clamp(0.0, 1.0)) as u8;
+        let g = (255.0 * g.clamp(0.0, 1.0)) as u8;
+        let b = (255.0 * b.clamp(0.0, 1.0)) as u8;
 
         write!(f, "{} {} {}", r, g, b)
     }
