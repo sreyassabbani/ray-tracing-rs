@@ -1,8 +1,11 @@
 //! Module defining the [`Ray`] struct and the [`Hittable`] trait
+//!
+//! Closely related to [`crate::material`] module. That module exports the type [`EmergentRay`] (design decisions on this might need to be reviewed).
 
 use std::sync::Arc;
 
 use crate::color::Color;
+use crate::material::{EmergentRayInteraction, Material};
 use crate::utils::interval::Interval;
 use crate::vector::{Point, Vector};
 
@@ -10,7 +13,7 @@ use thiserror::Error;
 
 /// A struct for representing rays
 ///
-/// Note: `origin` is a reference, whereas `dir` is an owned value. This is a very intentional design decision (that could be bad).
+// Could shared `origin` be premature optimization? Maybe.
 #[derive(Clone)]
 pub struct Ray<'a> {
     origin: &'a Point<f64>,
@@ -48,14 +51,14 @@ impl<'a> Ray<'a> {
         // Use 0.001 instead of 0.0 to avoid shadow acne
         match world.hit(Interval::new(0.001, f64::MAX), self) {
             Some(record) => {
-                // Naive implementation:
-                // let direction = &record.normal + &Vector::random_on_hemisphere(&record.normal);
-
-                // Lambertian reflection
-                let direction = &record.normal + &Vector::random_unit();
-
-                let scattered_ray = Ray::new(&record.point, direction);
-                return scattered_ray.color(world, bounce - 1) * 0.5;
+                use EmergentRayInteraction::*;
+                // Self interacts with material, and send in corresponding record of its interaction (awkward)
+                match record.material.interact(self, &record) {
+                    Absorbed => {
+                        return Color::new(0.0, 0.0, 0.0);
+                    }
+                    Scattered(ray) => return ray.attenuation * ray.inner.color(world, bounce - 1),
+                }
             }
             // Render the sky instead
             None => {
@@ -73,6 +76,8 @@ pub struct HitRecord {
     pub(super) normal: Vector<f64, 3>,
     pub(super) t: f64,
     pub(super) front_face: bool,
+    // Could this possibly be reduced down to `Box`? Look into various implementations of `Hittable` trait for objects
+    pub(super) material: Arc<dyn Material>,
 }
 
 impl HitRecord {
@@ -108,8 +113,8 @@ impl HittableList {
     /// world.add(Rc::new(sphere))?;
     /// world.add(Rc::new(ground))?;
     /// ```
-    pub fn add(&mut self, object: Arc<dyn Hittable>) -> Result<(), Error> {
-        self.0.push(Arc::clone(&object));
+    pub fn add(&mut self, object: impl Hittable + 'static) -> Result<(), Error> {
+        self.0.push(Arc::new(object));
         Ok(())
     }
 }

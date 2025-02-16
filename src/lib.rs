@@ -1,6 +1,7 @@
 //! Re-exports
 
 pub mod color;
+pub mod material;
 pub mod number;
 pub mod objects;
 pub mod ray;

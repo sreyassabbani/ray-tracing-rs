@@ -97,11 +97,11 @@ where
     }
 }
 
-impl Vector<f64, 3> {
+impl<const N: usize> Vector<f64, N> {
     #[inline]
     pub fn random() -> Self {
         Self {
-            entries: Box::new([rand::random(); 3]),
+            entries: Box::new([rand::random(); N]),
         }
     }
 
@@ -125,13 +125,18 @@ impl Vector<f64, 3> {
     }
 
     #[inline]
-    pub fn random_on_hemisphere(normal: &Vector<f64, 3>) -> Self {
+    pub fn random_on_hemisphere(normal: &Self) -> Self {
         let on_unit_sphere = Self::random_unit();
         if on_unit_sphere.dot(normal) > 0.0 {
             return on_unit_sphere;
         } else {
             return on_unit_sphere * -1.0;
         }
+    }
+
+    #[inline]
+    pub fn reflect(&self, normal: &Self) -> Self {
+        self - normal * (self.dot(normal) * 2.0)
     }
 }
 

@@ -3,6 +3,9 @@
 //! Contains
 //! * [`Sphere`]
 
+use std::sync::Arc;
+
+use crate::material::Material;
 use crate::ray::{HitRecord, Hittable, Ray};
 use crate::utils::interval::Interval;
 use crate::vector::Point;
@@ -10,11 +13,18 @@ use crate::vector::Point;
 pub struct Sphere {
     center: Point<f64>,
     radius: f64,
+    material: Arc<dyn Material>,
 }
 
 impl Sphere {
-    pub fn new(center: Point<f64>, radius: f64) -> Self {
-        Self { center, radius }
+    // Should I take `Arc<Box<dyn Material>>` instead? Little worried about `'static` and maybe there's a way around not enforcing static lifetime of the material.
+    // See other ways if possible
+    pub fn new(center: Point<f64>, radius: f64, material: impl Material + 'static) -> Self {
+        Self {
+            center,
+            radius,
+            material: Arc::new(material),
+        }
     }
 }
 
@@ -44,6 +54,7 @@ impl Hittable for Sphere {
             front_face: ray.dir().dot(&normal) > 0.0,
             // Move normal into [`HitRecord`]
             normal,
+            material: Arc::clone(&self.material),
         })
     }
 }

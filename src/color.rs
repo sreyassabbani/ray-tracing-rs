@@ -3,7 +3,8 @@
 use std::fmt;
 use std::ops;
 
-#[derive(Clone)]
+// Was `Copy` a good idea?
+#[derive(Clone, Copy)]
 pub struct Color {
     r: f64,
     g: f64,
