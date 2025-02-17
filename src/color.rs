@@ -3,6 +3,7 @@
 use std::fmt;
 use std::ops;
 
+use crate::utils::rand::{random, random_range};
 // Was `Copy` a good idea?
 #[derive(Clone, Copy)]
 pub struct Color {
@@ -14,6 +15,22 @@ pub struct Color {
 impl Color {
     pub fn new(r: f64, g: f64, b: f64) -> Self {
         Color { r, g, b }
+    }
+
+    pub fn random() -> Self {
+        Color {
+            r: random(),
+            g: random(),
+            b: random(),
+        }
+    }
+
+    pub fn random_range(min: f64, max: f64) -> Self {
+        Color {
+            r: random_range(min, max),
+            g: random_range(min, max),
+            b: random_range(min, max),
+        }
     }
 }
 

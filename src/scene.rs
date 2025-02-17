@@ -15,8 +15,8 @@ use rayon::prelude::*;
 use crate::color::Color;
 use crate::objects::HittableList;
 use crate::ray::Ray;
-use crate::utils::rand;
-use crate::vector::{Point, Vector};
+use crate::utils::{self, rand};
+use crate::vector::{Point, UtVector, Vector};
 
 /// [`ImageOptions`] can be used to configure a [`Camera`].
 ///
@@ -73,69 +73,6 @@ impl ImageOptions {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct ViewportOptions {
-    width: f64,
-    height: f64,
-}
-
-impl ViewportOptions {
-    pub fn new(width: f64, height: f64) -> Self {
-        Self { width, height }
-    }
-
-    pub fn aspect_ratio(&self) -> f64 {
-        self.width / self.height
-    }
-}
-
-/// Internal struct for handling information about the viewport
-/// * Not to be confused with [`ViewportOptions`], which is what the user may configure. The values of everything in this struct is completely determined by [`ViewportOptions`]
-#[derive(Clone)]
-struct ComputedData {
-    u: Vector,
-    v: Vector,
-    pixel_delta_u: Vector,
-    pixel_delta_v: Vector,
-    viewport_upper_left: Point,
-    pixel00_loc: Point,
-    pixel_samples_scale: Option<f64>,
-}
-
-impl ComputedData {
-    fn new(
-        viewport_options: &ViewportOptions,
-        image_options: &ImageOptions,
-        center: &Point,
-        focal_length: f64,
-    ) -> Self {
-        let u = Vector::from([viewport_options.width, 0.0, 0.0]);
-        let v = Vector::from([0.0, -viewport_options.height, 0.0]);
-
-        let pixel_delta_u = &u / image_options.width as f64;
-        let pixel_delta_v = &v / image_options.height as f64;
-
-        let viewport_upper_left =
-            center - &Vector::from([0.0, 0.0, focal_length]) - &u / 2.0 - &v / 2.0;
-        let pixel00_loc = &viewport_upper_left + &((&pixel_delta_u + &pixel_delta_v) * 0.5);
-
-        let pixel_samples_scale = match image_options.antialias {
-            AntialiasOptions::Disabled => None,
-            AntialiasOptions::Enabled(samples_per_pixel) => Some(1.0 / samples_per_pixel as f64),
-        };
-
-        Self {
-            u,
-            v,
-            pixel_delta_u,
-            pixel_delta_v,
-            viewport_upper_left,
-            pixel00_loc,
-            pixel_samples_scale,
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct RenderOptions {
     parallel: ParallelOptions,
@@ -154,7 +91,7 @@ pub enum ParallelOptions {
 impl RenderOptions {
     pub fn new() -> Self {
         Self {
-            parallel: ParallelOptions::AllAtOnce,
+            parallel: ParallelOptions::ByRows,
         }
     }
 
@@ -168,41 +105,103 @@ impl RenderOptions {
 pub struct Camera {
     center: Point,
     focal_length: f64,
-    viewport_options: ViewportOptions,
+    vfov: f64,
+    up: Vector,
+    v: UtVector,
+    u: UtVector,
+    w: UtVector,
+    viewport_u: Vector,
+    viewport_v: Vector,
+    pixel_delta_u: Vector,
+    pixel_delta_v: Vector,
+    defocus_angle: f64,
+    focus_dist: f64,
+    defocus_disk_u: Vector,
+    defocus_disk_v: Vector,
+    viewport_upper_left: Point,
+    pixel00_loc: Point,
+    pixel_samples_scale: Option<f64>,
     image_options: ImageOptions,
     render_options: RenderOptions,
-    computed_data: ComputedData,
     world: HittableList,
 }
 
 impl Camera {
     /// Can only call once
     pub fn new(
-        center: Point,
-        focal_length: f64,
-        viewport_options: ViewportOptions,
+        vfov: f64,
+        defocus_angle: f64,
+        focus_dist: f64,
+        look_from: Point,
+        look_at: Point,
+        up: Vector,
         image_options: ImageOptions,
         world: HittableList,
     ) -> Result<Self, Error> {
-        if image_options.aspect_ratio() != viewport_options.aspect_ratio() {
-            return Err(Error::MismatchedImageViewportAspectRatios);
-        }
-
-        let computed_data =
-            ComputedData::new(&viewport_options, &image_options, &center, focal_length);
-
         let render_options = RenderOptions::new();
 
         // Set up logger only once
         env_logger::init();
 
+        let center = look_from;
+        // let focal_length = (look_from - look_at).len();
+        let theta = (vfov / 180.0) * std::f64::consts::PI;
+
+        let h = (theta / 2.0).tan();
+        let viewport_height = 2.0 * h * focus_dist;
+        let viewport_width =
+            viewport_height * (image_options.width as f64 / image_options.height as f64);
+
+        println!("Viewport Width: {}", viewport_width);
+        println!("Viewport Height: {}", viewport_height);
+
+        let w = (look_from - look_at).unit();
+        let u = up.cross(&w).unit();
+        let v = w.cross(&u).assert_unit_unsafe();
+
+        let viewport_u = u.inner() * viewport_width;
+        let viewport_v = -v.inner() * viewport_height;
+
+        let pixel_delta_u = viewport_u / image_options.width as f64;
+        let pixel_delta_v = viewport_v / image_options.height as f64;
+
+        println!("Pixel Delta U: {:?}", pixel_delta_u);
+        println!("Pixel Delta V: {:?}", pixel_delta_v);
+
+        let viewport_upper_left =
+            center - (w.inner() * focus_dist) - viewport_u / 2.0 - viewport_v / 2.0;
+        let pixel00_loc = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
+
+        let defocus_radius = focus_dist * (utils::degrees_to_radians(defocus_angle / 2.0)).tan();
+        let defocus_disk_u = u.inner() * defocus_radius;
+        let defocus_disk_v = v.inner() * defocus_radius;
+
+        let pixel_samples_scale = match image_options.antialias {
+            AntialiasOptions::Disabled => None,
+            AntialiasOptions::Enabled(samples_per_pixel) => Some(1.0 / samples_per_pixel as f64),
+        };
+
         Ok(Self {
             center,
-            focal_length,
-            viewport_options,
+            focal_length: focus_dist,
+            vfov,
+            up,
+            w,
+            u,
+            v,
+            focus_dist,
+            defocus_angle,
+            defocus_disk_u,
+            defocus_disk_v,
+            viewport_u,
+            viewport_v,
+            pixel_delta_u,
+            pixel_delta_v,
+            viewport_upper_left,
+            pixel00_loc,
+            pixel_samples_scale,
             image_options,
             render_options,
-            computed_data,
             world,
         })
     }
@@ -211,7 +210,7 @@ impl Camera {
         self.image_options = image_options;
 
         // Update computed data -- REALLY BAD -- TODO refactor
-        self.computed_data.pixel_samples_scale = match image_options.antialias {
+        self.pixel_samples_scale = match image_options.antialias {
             AntialiasOptions::Disabled => None,
             AntialiasOptions::Enabled(samples_per_pixel) => Some(1.0 / samples_per_pixel as f64),
         };
@@ -244,7 +243,6 @@ impl Camera {
     }
 
     /// Internal function to write P3 PPM header
-    #[inline]
     fn write_ppm_p3_header(&self, file: &mut fs::File) -> Result<(), Box<dyn std::error::Error>> {
         // P3 PPM header
         writeln!(file, "P3")?;
@@ -259,7 +257,6 @@ impl Camera {
     }
 
     /// Internal inlined function that is called when `render_options`: [`RenderOptions`] of [`Camera`] has the `parallel` field set to [`ParallelOptions::AllAtOnce`]
-    #[inline]
     fn render_parallel_all(&self, file: &mut fs::File) -> Result<(), Box<dyn std::error::Error>> {
         let mut pixels = vec![
             Color::new(0.0, 0.0, 0.0);
@@ -288,7 +285,6 @@ impl Camera {
     }
 
     /// Internal inlined function that is called when `render_options`: [`RenderOptions`] of [`Camera`] has the `parallel` field set to [`ParallelOptions::ByRows`]
-    #[inline]
     fn render_parallel_by_rows(
         &self,
         file: &mut fs::File,
@@ -312,7 +308,6 @@ impl Camera {
     }
 
     /// Internal inlined function that is called when `render_options`: [`RenderOptions`] of [`Camera`] has the `parallel` field set to [`ParallelOptions::Series`]
-    #[inline]
     fn render_sequential(&self, file: &mut fs::File) -> Result<(), Box<dyn std::error::Error>> {
         // Write the pixel data
         for j in 0..self.image_options.height {
@@ -330,7 +325,6 @@ impl Camera {
         Ok(())
     }
 
-    #[inline]
     fn pixel_color_at(&self, i: u32, j: u32) -> Color {
         let mut pixel_color = Color::new(0.0, 0.0, 0.0);
 
@@ -338,42 +332,43 @@ impl Camera {
         match self.image_options.antialias {
             Disabled => {
                 let pixel_center = self.get_pixel_center_coordinates(i, j);
-                let ray_direction = &pixel_center - &self.center;
+                let ray_direction = pixel_center - self.center;
                 let r = Ray::new(&self.center, ray_direction.unit());
                 pixel_color += r.color(&self.world, 50);
             }
             Enabled(samples_per_pixel) => {
                 for _ in 0..samples_per_pixel {
-                    let r = self.get_antialiasing_ray(i, j);
+                    let (ray_origin, ray_dir) = self.get_antialiasing_ray_components(i, j);
+                    let r = Ray::new(&ray_origin, ray_dir);
                     // Should never panic
-                    pixel_color +=
-                        r.color(&self.world, 50) * self.computed_data.pixel_samples_scale.unwrap();
+                    pixel_color += r.color(&self.world, 50) * self.pixel_samples_scale.unwrap();
                 }
             }
         }
         pixel_color
     }
 
-    #[inline]
     fn get_pixel_center_coordinates(&self, i: u32, j: u32) -> Point {
-        &self.computed_data.pixel00_loc
-            + &(&self.computed_data.pixel_delta_u * i as f64)
-            + (&self.computed_data.pixel_delta_v * j as f64)
+        self.pixel00_loc + (self.pixel_delta_u * i as f64) + (self.pixel_delta_v * j as f64)
     }
 
     /// Gives a [`Ray`] that is nearby the neighborhood of `i` and `j`. Specifically, at most 0.5 away from real location
-    #[inline]
-    fn get_antialiasing_ray(&self, i: u32, j: u32) -> Ray {
+    fn get_antialiasing_ray_components(&self, i: u32, j: u32) -> (Point, UtVector) {
         let offset = Self::sample_square();
         // let point_to = self.get_pixel_center_coordinates(i, j) - offset;
-        let point_to = &self.computed_data.pixel00_loc
-            + &(&self.computed_data.pixel_delta_u * (i as f64 + offset.x()))
-            + (&self.computed_data.pixel_delta_v * (j as f64 + offset.y()));
-        Ray::new(&self.center, point_to.unit())
+        let point_to = &self.pixel00_loc
+            + (self.pixel_delta_u * (i as f64 + offset.x()))
+            + (self.pixel_delta_v * (j as f64 + offset.y()));
+        let ray_origin = if self.defocus_angle <= 0.0 {
+            self.center.clone()
+        } else {
+            self.defocus_disk_sample()
+        };
+        let ray_direction = (point_to - ray_origin).unit();
+        (ray_origin, ray_direction)
     }
 
     /// Internal method for generating a random vector inside of a unit square
-    #[inline]
     fn sample_square() -> Vector {
         Vector::new(
             rand::random_range(-0.5, 0.5),
@@ -381,10 +376,13 @@ impl Camera {
             0.0,
         )
     }
+
+    fn defocus_disk_sample(&self) -> Point {
+        // Returns a random point in the camera defocus disk.
+        let p = Vector::random_unit();
+        self.center + (self.defocus_disk_u * p.x()) + (self.defocus_disk_v * p.y())
+    }
 }
 
 #[derive(Error, Debug)]
-pub enum Error {
-    #[error("Image and viewport aspect ratios are not equal")]
-    MismatchedImageViewportAspectRatios,
-}
+pub enum Error {}

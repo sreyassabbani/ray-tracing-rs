@@ -45,7 +45,7 @@ impl Hittable for Sphere {
         }
 
         // Even though the vector seems to emanate from the center of the circle, it is still a normal vector to the sphere's surface. Keep that in mind. Also, we divide by `radius` because of negative-radii spheres apparently instead of normalizing by length.
-        let mut normal = ((&ray.at(t) - &self.center) / self.radius).is_unit_unsafe();
+        let mut normal = ((ray.at(t) - self.center) / self.radius).assert_unit_unsafe();
 
         let front_face = ray.dir_v().dot(&normal) < 0.0;
         if !front_face {

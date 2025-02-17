@@ -1,12 +1,12 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 
 use ray_tracing_rs::color::Color;
-use ray_tracing_rs::material::Lambertian;
+use ray_tracing_rs::materials::Lambertian;
 use ray_tracing_rs::objects::Sphere;
 use ray_tracing_rs::scene::{ParallelOptions, RenderOptions};
-use ray_tracing_rs::{Camera, HittableList, ImageOptions, Point, ViewportOptions};
+use ray_tracing_rs::vector::Vector;
+use ray_tracing_rs::{Camera, HittableList, ImageOptions, Point};
 
-use std::sync::Arc;
 use std::time::Duration;
 
 fn basic_world(c: &mut Criterion) {
@@ -21,8 +21,11 @@ fn basic_world(c: &mut Criterion) {
     world.add(ground).unwrap();
 
     let image = ImageOptions::new(16, 9);
-    let viewport = ViewportOptions::new(image.aspect_ratio() * 2.0, 2.0);
-    let mut camera = Camera::new(Point::new(0.0, 0.0, 0.0), 1.0, viewport, image, world).unwrap();
+    let vfov = 90.0;
+    let look_from = Point::new(-0.0, 0.0, 0.0);
+    let look_at = Point::new(0.0, 0.0, -1.0);
+    let up = Vector::new(0.0, 1.0, 0.0);
+    let mut camera = Camera::new(vfov, 10.0, 1.0, look_from, look_at, up, image, world).unwrap();
 
     // Bench for different samples per pixel (SPP)
     // 0 SPP configures AntialiasOptions::Disabled

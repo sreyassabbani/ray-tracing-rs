@@ -75,7 +75,7 @@ impl Vector {
         Ok(UtVector { v: self })
     }
 
-    pub fn is_unit_unsafe(self) -> UtVector {
+    pub fn assert_unit_unsafe(self) -> UtVector {
         UtVector { v: self }
     }
 
