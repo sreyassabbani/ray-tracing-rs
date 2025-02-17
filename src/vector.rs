@@ -1,130 +1,104 @@
-//! Module defining [`Vector<T, N>`], and variants [`Point<T, 3>`], ...
+//! Module defining [`Vector`], and variants [`Point`], [`UtVector`]
 
-use crate::{number::Numeric, utils::rand};
-use std::{fmt, ops};
+use crate::utils::rand;
 
-#[derive(Clone)]
-pub struct Vector<T, const N: usize> {
-    pub(super) entries: Box<[T; N]>,
+use std::{
+    array,
+    ops::{self, Deref},
+};
+
+#[derive(Clone, Copy, Debug)]
+pub struct Vector {
+    x: f64,
+    y: f64,
+    z: f64,
 }
 
-impl<T, const N: usize> fmt::Debug for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for i in 0..self.entries.len() - 1 {
-            write!(f, "{:?} ", self[i])?;
-        }
-        write!(f, "{:?}", self[self.entries.len() - 1])?;
-        Ok(())
-    }
-}
-
-impl<T, const N: usize> FromIterator<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let mut collection = Self::_new();
-
-        for (i, ele) in iter.into_iter().enumerate() {
-            collection[i] = ele;
-        }
-
-        collection
-    }
-}
-
-impl<T, const N: usize> std::ops::Index<usize> for Vector<T, N> {
-    type Output = T;
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.entries[index]
-    }
-}
-
-impl<T, const N: usize> std::ops::IndexMut<usize> for Vector<T, N> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.entries[index]
-    }
-}
-
-impl<T, const N: usize> From<[T; N]> for Vector<T, N> {
-    fn from(value: [T; N]) -> Self {
+impl From<[f64; 3]> for Vector {
+    fn from(value: [f64; 3]) -> Self {
         Self {
-            entries: Box::new(value),
+            x: value[0],
+            y: value[1],
+            z: value[2],
         }
     }
 }
 
-impl<T, const N: usize> Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    /// An internal method for instantiating a [`Vector<T, N>`] type.
-    pub(super) fn _new() -> Self {
-        Self {
-            // `std::array::from_fn` avoids `Copy` (? I don't know why I used this)
-            entries: Box::new(std::array::from_fn(|_| T::default())),
-        }
+impl Vector {
+    /// Create a new [`Vector`]
+    pub fn new(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z }
     }
 
-    #[inline]
-    pub fn dot(&self, other: &Self) -> T {
-        // TODO: look into monoids for `additive_identity`
-        self.entries
-            .iter()
-            .zip(other.entries.iter())
-            .map(|(&l, &r)| l * r)
-            .fold(T::additive_identity(), |acc, x| acc + x)
+    pub fn x(&self) -> f64 {
+        self.x
     }
 
-    /// Returns the norm squared of a [`Vector<T, N>`]
-    #[inline]
-    pub fn norm_squared(&self) -> T {
+    pub fn y(&self) -> f64 {
+        self.y
+    }
+
+    pub fn z(&self) -> f64 {
+        self.z
+    }
+
+    pub fn dot(&self, other: &Self) -> f64 {
+        self.x * other.x + self.y * other.y + self.z * other.z
+    }
+
+    pub fn cross(&self, other: &Self) -> Self {
+        Vector::from([
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x,
+        ])
+    }
+
+    pub fn len_squared(&self) -> f64 {
         self.dot(self)
     }
 
-    /// Norm/length of a vector
-    #[inline]
-    pub fn norm(&self) -> T {
-        T::from(self.norm_squared().into().sqrt())
+    pub fn len(&self) -> f64 {
+        self.len_squared().sqrt()
     }
 
-    #[inline]
-    pub fn unit(&self) -> Self {
-        self / self.norm()
+    pub fn unit(&self) -> UtVector {
+        UtVector {
+            v: self / self.len(),
+        }
     }
-}
 
-impl<const N: usize> Vector<f64, N> {
-    #[inline]
+    pub fn is_unit(self) -> Result<UtVector, Error> {
+        if self.len_squared() != 1.0 {
+            return Err(Error::NotUnitVector);
+        }
+        Ok(UtVector { v: self })
+    }
+
+    pub fn is_unit_unsafe(self) -> UtVector {
+        UtVector { v: self }
+    }
+
     pub fn random() -> Self {
-        Self {
-            entries: Box::new([rand::random(); N]),
-        }
+        // Generate a different random number for each component
+        Vector::from(array::from_fn(|_| rand::random()))
     }
 
-    #[inline]
     pub fn random_range(min: f64, max: f64) -> Self {
-        Self {
-            // I believe I ran into this issue before where a non-deterministic function only gets called once, but I still spent way too long debugging this
-            entries: Box::new(std::array::from_fn(|_| rand::random_range(min, max))),
-        }
+        // Generate a different random number for each component
+        Vector::from(array::from_fn(|_| rand::random_range(min, max)))
     }
 
-    #[inline]
     pub fn random_unit() -> Self {
         loop {
             let p = Self::random_range(-1.0, 1.0);
-            let nsq = p.norm();
+            let nsq = p.len();
             if 1e-160 < nsq && nsq <= 1.0 {
                 return p / nsq;
             }
         }
     }
 
-    #[inline]
     pub fn random_on_hemisphere(normal: &Self) -> Self {
         let on_unit_sphere = Self::random_unit();
         if on_unit_sphere.dot(normal) > 0.0 {
@@ -133,213 +107,302 @@ impl<const N: usize> Vector<f64, N> {
             return on_unit_sphere * -1.0;
         }
     }
-
-    #[inline]
-    pub fn reflect(&self, normal: &Self) -> Self {
-        self - normal * (self.dot(normal) * 2.0)
-    }
 }
 
-impl<T, const N: usize> ops::Add for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
+mod _utils {
+    //! Internal helper module for defining operations on [`Vector`]
 
-    #[inline]
-    fn add(self, rhs: Self) -> Self::Output {
-        self.entries
-            .iter()
-            .zip(rhs.entries.iter())
-            .map(|(&l, &r)| l + r)
-            .collect()
+    use super::*;
+
+    pub(super) fn add_vectors(lhs: &Vector, rhs: &Vector) -> Vector {
+        Vector::from([lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z])
     }
-}
 
-impl<T, const N: usize> ops::Add for &Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
-
-    #[inline]
-    fn add(self, rhs: Self) -> Self::Output {
-        self.entries
-            .iter()
-            .zip(rhs.entries.iter())
-            .map(|(&l, &r)| l + r)
-            .collect()
+    pub(super) fn sub_vectors(lhs: &Vector, rhs: &Vector) -> Vector {
+        Vector::from([lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z])
     }
-}
 
-impl<T, const N: usize> ops::AddAssign<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    #[inline]
-    fn add_assign(&mut self, rhs: T) {
-        self.entries.map(|e| e + rhs);
+    pub(super) fn mul_vector_and_scalar(lhs: &Vector, rhs: f64) -> Vector {
+        Vector::from([lhs.x * rhs, lhs.y * rhs, lhs.z * rhs])
     }
-}
 
-impl<T, const N: usize> ops::Sub for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
-    #[inline]
-    fn sub(self, rhs: Self) -> Self::Output {
-        self.entries
-            .iter()
-            .zip(rhs.entries.iter())
-            .map(|(&l, &r)| l - r)
-            .collect()
+    pub(super) fn div_vector_and_scalar(lhs: &Vector, rhs: f64) -> Vector {
+        Vector::from([lhs.x / rhs, lhs.y / rhs, lhs.z / rhs])
     }
-}
 
-impl<T, const N: usize> ops::Sub for &Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
-    #[inline]
-    fn sub(self, rhs: Self) -> Self::Output {
-        self.entries
-            .iter()
-            .zip(rhs.entries.iter())
-            .map(|(&l, &r)| l - r)
-            .collect()
+    pub(super) fn add_assign_num_to_vector(value: &mut Vector, rhs: f64) {
+        value.x += rhs;
+        value.y += rhs;
+        value.z += rhs;
     }
-}
 
-impl<T, const N: usize> ops::Sub<Vector<T, N>> for &Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
-    #[inline]
-    fn sub(self, rhs: Vector<T, N>) -> Self::Output {
-        self.entries
-            .iter()
-            .zip(rhs.entries.iter())
-            .map(|(&l, &r)| l - r)
-            .collect()
+    pub(super) fn sub_assign_num_to_vector(value: &mut Vector, rhs: f64) {
+        value.x -= rhs;
+        value.y -= rhs;
+        value.z -= rhs;
     }
-}
 
-impl<T, const N: usize> ops::SubAssign<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    #[inline]
-    fn sub_assign(&mut self, rhs: T) {
-        self.entries.map(|e| e + rhs);
+    pub(super) fn mul_assign_num_to_vector(value: &mut Vector, rhs: f64) {
+        value.x *= rhs;
+        value.y *= rhs;
+        value.z *= rhs;
     }
-}
 
-// TODO: Left multiplication is blocked by orphan rules
-impl<T, const N: usize> ops::Mul<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
-    /// Provides scalar multiplication of [`Vector<T, N>`]
-    #[inline]
-    fn mul(self, rhs: T) -> Self::Output {
-        Vector::from(self.entries.map(|ele| ele * rhs))
+    pub(super) fn div_assign_num_to_vector(value: &mut Vector, rhs: f64) {
+        value.x /= rhs;
+        value.y /= rhs;
+        value.z /= rhs;
     }
-}
 
-impl<T, const N: usize> ops::Mul<T> for &Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
-    /// Provides scalar multiplication of [`Vector<T, N>`]
-    #[inline]
-    fn mul(self, rhs: T) -> Self::Output {
-        Vector::from(self.entries.map(|ele| ele * rhs))
+    pub(super) fn neg_vector(value: &Vector) -> Vector {
+        Vector::from([-value.x, -value.y, -value.z])
     }
-}
 
-impl<T, const N: usize> ops::MulAssign<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    #[inline]
-    fn mul_assign(&mut self, rhs: T) {
-        self.entries.map(|e| e + rhs);
-    }
-}
-
-impl<T, const N: usize> ops::Div<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
-    /// Provides scalar division of [`Vector<T, N>`]
-    #[inline]
-    fn div(self, rhs: T) -> Self::Output {
-        Vector::from(self.entries.map(|ele| ele / rhs))
-    }
-}
-
-impl<T, const N: usize> ops::Div<T> for &Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    type Output = Vector<T, N>;
-    /// Provides scalar division of [`&Vector<T, N>`]
-    #[inline]
-    fn div(self, rhs: T) -> Self::Output {
-        Vector::from(self.entries.map(|ele| ele / rhs))
-    }
-}
-
-impl<T, const N: usize> ops::DivAssign<T> for Vector<T, N>
-where
-    T: Numeric<T>,
-{
-    #[inline]
-    fn div_assign(&mut self, rhs: T) {
-        self.entries.map(|e| e / rhs);
-    }
-}
-
-/// Exported type alias for [`Vector<T, 3>`]
-pub type Point<T> = Vector<T, 3>;
-
-impl<T> Point<T>
-where
-    T: Numeric<T>,
-{
-    pub fn new(x: T, y: T, z: T) -> Self {
-        Self {
-            entries: Box::new([x, y, z]),
+    pub(super) fn neg_utvector(value: &UtVector) -> UtVector {
+        UtVector {
+            v: Vector::from([-value.x, -value.y, -value.z]),
         }
     }
 
-    pub fn x(&self) -> T {
-        self[0]
+    pub(super) fn add_vector_to_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
+        Vector::from([lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z])
     }
 
-    pub fn y(&self) -> T {
-        self[1]
+    pub(super) fn sub_vector_to_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
+        Vector::from([lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z])
     }
 
-    pub fn z(&self) -> T {
-        self[2]
+    pub(super) fn mul_vector_to_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
+        Vector::from([lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z])
     }
 
-    // Pretty sure cross product only exists in 3 (and 7) dimensions
-    /// Cross product with another 3D vector ([`Point<T>`])
-    pub fn cross(&self, other: &Self) -> Self {
-        // Ouch to cache
-        // TODO: make this better
-        Vector::from([
-            self[1] * other[2] - self[2] * other[1],
-            self[2] * other[0] - self[0] * other[2],
-            self[0] * other[1] - self[1] * other[0],
-        ])
+    pub(super) fn div_vector_to_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
+        Vector::from([lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z])
     }
+}
+
+use _utils::*;
+use thiserror::Error;
+
+// Addition implementations
+impl ops::Add<Vector> for Vector {
+    type Output = Vector;
+
+    fn add(self, rhs: Vector) -> Self::Output {
+        add_vectors(&self, &rhs)
+    }
+}
+
+impl ops::Add<Vector> for &Vector {
+    type Output = Vector;
+
+    fn add(self, rhs: Vector) -> Self::Output {
+        add_vectors(self, &rhs)
+    }
+}
+
+impl ops::Add<&Vector> for Vector {
+    type Output = Vector;
+
+    fn add(self, rhs: &Vector) -> Self::Output {
+        add_vectors(&self, rhs)
+    }
+}
+
+impl ops::Add<&Vector> for &Vector {
+    type Output = Vector;
+
+    fn add(self, rhs: &Vector) -> Self::Output {
+        add_vectors(&self, &rhs)
+    }
+}
+
+impl ops::AddAssign<f64> for Vector {
+    fn add_assign(&mut self, rhs: f64) {
+        add_assign_num_to_vector(self, rhs)
+    }
+}
+
+// Subtraction implementations
+impl ops::Sub<Vector> for Vector {
+    type Output = Vector;
+
+    fn sub(self, rhs: Vector) -> Self::Output {
+        sub_vectors(&self, &rhs)
+    }
+}
+
+impl ops::Sub<Vector> for &Vector {
+    type Output = Vector;
+
+    fn sub(self, rhs: Vector) -> Self::Output {
+        sub_vectors(self, &rhs)
+    }
+}
+
+impl ops::Sub<&Vector> for Vector {
+    type Output = Vector;
+
+    fn sub(self, rhs: &Vector) -> Self::Output {
+        sub_vectors(&self, rhs)
+    }
+}
+
+impl ops::Sub<&Vector> for &Vector {
+    type Output = Vector;
+
+    fn sub(self, rhs: &Vector) -> Self::Output {
+        sub_vectors(&self, &rhs)
+    }
+}
+
+impl ops::SubAssign<f64> for Vector {
+    fn sub_assign(&mut self, rhs: f64) {
+        sub_assign_num_to_vector(self, rhs)
+    }
+}
+
+// Multiplication implementations
+impl ops::Mul<f64> for Vector {
+    type Output = Vector;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        mul_vector_and_scalar(&self, rhs)
+    }
+}
+
+impl ops::Mul<f64> for &Vector {
+    type Output = Vector;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        mul_vector_and_scalar(self, rhs)
+    }
+}
+
+impl ops::MulAssign<f64> for Vector {
+    fn mul_assign(&mut self, rhs: f64) {
+        mul_assign_num_to_vector(self, rhs)
+    }
+}
+
+// Division implementations
+impl ops::Div<f64> for Vector {
+    type Output = Vector;
+    fn div(self, rhs: f64) -> Self::Output {
+        div_vector_and_scalar(&self, rhs)
+    }
+}
+
+impl ops::Div<f64> for &Vector {
+    type Output = Vector;
+    fn div(self, rhs: f64) -> Self::Output {
+        div_vector_and_scalar(self, rhs)
+    }
+}
+
+impl ops::DivAssign<f64> for Vector {
+    fn div_assign(&mut self, rhs: f64) {
+        div_assign_num_to_vector(self, rhs)
+    }
+}
+
+// Neg implementations
+impl ops::Neg for Vector {
+    type Output = Vector;
+    fn neg(self) -> Self::Output {
+        neg_vector(&self)
+    }
+}
+
+impl ops::Neg for &Vector {
+    type Output = Vector;
+    fn neg(self) -> Self::Output {
+        neg_vector(self)
+    }
+}
+
+/// Type alias for [`Vector`]
+pub type Point = Vector;
+
+/// Represents a unit vector
+// I didn't make this `UtVector(Vector)` because I wanted the fields to be private so that it won't be initializable outside this module
+#[derive(Debug, Clone, Copy)]
+pub struct UtVector {
+    v: Vector,
+}
+
+impl Deref for UtVector {
+    type Target = Vector;
+    fn deref(&self) -> &Self::Target {
+        &self.v
+    }
+}
+
+impl UtVector {
+    pub fn relax(self) -> Vector {
+        self.v
+    }
+
+    pub fn inner(&self) -> &Vector {
+        &self.v
+    }
+
+    pub fn reflect(&self, normal: &Self) -> Self {
+        (self.inner() - normal.inner() * (self.dot(normal) * 2.0)).unit()
+    }
+
+    pub fn refract(&self, normal: &Self, refraction_index: f64) -> Self {
+        // R  : incident ray
+        // R' : transmitted ray
+        // n  : normal vector, same side as incident ray (`normal`)
+        // n' : normal vector, same side as transmitted ray
+        // i  : `refraction_index`
+
+        let incident = self.inner();
+        let normal_dir = &-normal.inner();
+
+        let cos_theta = (-incident).dot(normal_dir).min(1.0);
+
+        let r_out_perp = (incident + normal_dir * cos_theta) * refraction_index;
+        let r_out_parallel = normal_dir * (1.0 - r_out_perp.len_squared()).abs().sqrt();
+
+        // Return a unit vector
+        (r_out_parallel + r_out_perp).unit()
+    }
+}
+
+// Add implementations
+impl ops::Add<UtVector> for Vector {
+    type Output = Vector;
+    fn add(self, rhs: UtVector) -> Self::Output {
+        add_vector_to_utvector(&self, &rhs)
+    }
+}
+
+impl ops::Add<Vector> for UtVector {
+    type Output = Vector;
+    fn add(self, rhs: Vector) -> Self::Output {
+        add_vector_to_utvector(&rhs, &self)
+    }
+}
+
+// Neg implementations
+impl ops::Neg for UtVector {
+    type Output = UtVector;
+    fn neg(self) -> Self::Output {
+        neg_utvector(&self)
+    }
+}
+
+impl ops::Neg for &UtVector {
+    type Output = UtVector;
+    fn neg(self) -> Self::Output {
+        neg_utvector(self)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Length of given `Vector` is not 1.0")]
+    NotUnitVector,
 }

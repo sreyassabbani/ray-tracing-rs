@@ -13,7 +13,8 @@ use thiserror::Error;
 use rayon::prelude::*;
 
 use crate::color::Color;
-use crate::ray::{HittableList, Ray};
+use crate::objects::HittableList;
+use crate::ray::Ray;
 use crate::utils::rand;
 use crate::vector::{Point, Vector};
 
@@ -92,12 +93,12 @@ impl ViewportOptions {
 /// * Not to be confused with [`ViewportOptions`], which is what the user may configure. The values of everything in this struct is completely determined by [`ViewportOptions`]
 #[derive(Clone)]
 struct ComputedData {
-    u: Vector<f64, 3>,
-    v: Vector<f64, 3>,
-    pixel_delta_u: Vector<f64, 3>,
-    pixel_delta_v: Vector<f64, 3>,
-    viewport_upper_left: Point<f64>,
-    pixel00_loc: Point<f64>,
+    u: Vector,
+    v: Vector,
+    pixel_delta_u: Vector,
+    pixel_delta_v: Vector,
+    viewport_upper_left: Point,
+    pixel00_loc: Point,
     pixel_samples_scale: Option<f64>,
 }
 
@@ -105,7 +106,7 @@ impl ComputedData {
     fn new(
         viewport_options: &ViewportOptions,
         image_options: &ImageOptions,
-        center: &Point<f64>,
+        center: &Point,
         focal_length: f64,
     ) -> Self {
         let u = Vector::from([viewport_options.width, 0.0, 0.0]);
@@ -165,7 +166,7 @@ impl RenderOptions {
 
 #[derive(Clone)]
 pub struct Camera {
-    center: Point<f64>,
+    center: Point,
     focal_length: f64,
     viewport_options: ViewportOptions,
     image_options: ImageOptions,
@@ -177,7 +178,7 @@ pub struct Camera {
 impl Camera {
     /// Can only call once
     pub fn new(
-        center: Point<f64>,
+        center: Point,
         focal_length: f64,
         viewport_options: ViewportOptions,
         image_options: ImageOptions,
@@ -338,7 +339,7 @@ impl Camera {
             Disabled => {
                 let pixel_center = self.get_pixel_center_coordinates(i, j);
                 let ray_direction = &pixel_center - &self.center;
-                let r = Ray::new(&self.center, ray_direction);
+                let r = Ray::new(&self.center, ray_direction.unit());
                 pixel_color += r.color(&self.world, 50);
             }
             Enabled(samples_per_pixel) => {
@@ -354,7 +355,7 @@ impl Camera {
     }
 
     #[inline]
-    fn get_pixel_center_coordinates(&self, i: u32, j: u32) -> Point<f64> {
+    fn get_pixel_center_coordinates(&self, i: u32, j: u32) -> Point {
         &self.computed_data.pixel00_loc
             + &(&self.computed_data.pixel_delta_u * i as f64)
             + (&self.computed_data.pixel_delta_v * j as f64)
@@ -368,12 +369,12 @@ impl Camera {
         let point_to = &self.computed_data.pixel00_loc
             + &(&self.computed_data.pixel_delta_u * (i as f64 + offset.x()))
             + (&self.computed_data.pixel_delta_v * (j as f64 + offset.y()));
-        Ray::new(&self.center, point_to)
+        Ray::new(&self.center, point_to.unit())
     }
 
     /// Internal method for generating a random vector inside of a unit square
     #[inline]
-    fn sample_square() -> Vector<f64, 3> {
+    fn sample_square() -> Vector {
         Vector::new(
             rand::random_range(-0.5, 0.5),
             rand::random_range(-0.5, 0.5),
