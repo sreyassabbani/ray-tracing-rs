@@ -16,3 +16,11 @@ criterion = { version = "0.5.1", features = ["html_reports"] }
 [[bench]]
 name = "parallel"
 harness = false
+
+[[example]]
+name = "defocus-blur"
+path = "./examples/defocus_blur.rs"
+
+[[example]]
+name = "rtiow-final"
+path = "./examples/rtiow_final.rs"
