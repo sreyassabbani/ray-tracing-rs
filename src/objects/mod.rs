@@ -3,6 +3,8 @@
 //! Contains
 //! * [`Sphere`]
 
+#![warn(missing_docs)]
+
 pub mod sphere;
 
 pub use sphere::Sphere;
@@ -55,9 +57,9 @@ impl HittableList {
     /// world.add(Rc::new(sphere))?;
     /// world.add(Rc::new(ground))?;
     /// ```
-    pub fn add(&mut self, object: impl Hittable + 'static) -> Result<(), Error> {
+    pub fn add(&mut self, object: impl Hittable + 'static) -> Result<&mut Self, Error> {
         self.0.push(Arc::new(object));
-        Ok(())
+        Ok(self)
     }
 }
 
