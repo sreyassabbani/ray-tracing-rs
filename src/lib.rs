@@ -1,4 +1,4 @@
-//! Re-exports
+//! Exports
 
 pub mod color;
 pub mod materials;
@@ -7,6 +7,7 @@ pub mod ray;
 pub mod scene;
 pub mod vector;
 
+// Re-exports
 pub use objects::HittableList;
 pub use scene::{Camera, ImageOptions};
 pub use vector::Point;

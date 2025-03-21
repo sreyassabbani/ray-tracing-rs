@@ -100,13 +100,48 @@ impl RenderOptions {
         self
     }
 }
+/// Lightweight wrapper around `T`because `T` be `Option<T>`
+#[derive(Clone, Default)]
+pub enum BuildField<T> {
+    Init(T),
+    #[default]
+    Uninit,
+}
+
+#[derive(Clone, Default)]
+#[allow(unused)]
+pub struct CameraBuilder {
+    center: BuildField<Point>,
+    focal_length: BuildField<f64>,
+    vfov: BuildField<f64>,
+    v: BuildField<UtVector>,
+    u: BuildField<UtVector>,
+    w: BuildField<UtVector>,
+    viewport_u: BuildField<Vector>,
+    viewport_v: BuildField<Vector>,
+    pixel_delta_u: BuildField<Vector>,
+    pixel_delta_v: BuildField<Vector>,
+    defocus_angle: BuildField<f64>,
+    viewport_upper_left: BuildField<Point>,
+    pixel00_loc: BuildField<Point>,
+    pixel_samples_scale: BuildField<Option<f64>>,
+    image_options: BuildField<ImageOptions>,
+    render_options: BuildField<RenderOptions>,
+    world: BuildField<HittableList>,
+}
+
+impl CameraBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
 
 #[derive(Clone)]
+#[allow(unused)]
 pub struct Camera {
     center: Point,
     focal_length: f64,
     vfov: f64,
-    up: Vector,
     v: UtVector,
     u: UtVector,
     w: UtVector,
@@ -115,9 +150,6 @@ pub struct Camera {
     pixel_delta_u: Vector,
     pixel_delta_v: Vector,
     defocus_angle: f64,
-    focus_dist: f64,
-    defocus_disk_u: Vector,
-    defocus_disk_v: Vector,
     viewport_upper_left: Point,
     pixel00_loc: Point,
     pixel_samples_scale: Option<f64>,
@@ -131,7 +163,6 @@ impl Camera {
     pub fn new(
         vfov: f64,
         defocus_angle: f64,
-        focus_dist: f64,
         look_from: Point,
         look_at: Point,
         up: Vector,
@@ -143,17 +174,13 @@ impl Camera {
         // Set up logger only once
         env_logger::init();
 
-        let center = look_from;
-        // let focal_length = (look_from - look_at).len();
+        let focal_length = (look_from - look_at).len();
         let theta = (vfov / 180.0) * std::f64::consts::PI;
 
         let h = (theta / 2.0).tan();
-        let viewport_height = 2.0 * h * focus_dist;
+        let viewport_height = 2.0 * h * focal_length;
         let viewport_width =
             viewport_height * (image_options.width as f64 / image_options.height as f64);
-
-        println!("Viewport Width: {}", viewport_width);
-        println!("Viewport Height: {}", viewport_height);
 
         let w = (look_from - look_at).unit();
         let u = up.cross(&w).unit();
@@ -165,16 +192,9 @@ impl Camera {
         let pixel_delta_u = viewport_u / image_options.width as f64;
         let pixel_delta_v = viewport_v / image_options.height as f64;
 
-        println!("Pixel Delta U: {:?}", pixel_delta_u);
-        println!("Pixel Delta V: {:?}", pixel_delta_v);
-
         let viewport_upper_left =
-            center - (w.inner() * focus_dist) - viewport_u / 2.0 - viewport_v / 2.0;
+            look_from - (w.inner() * focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
         let pixel00_loc = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
-
-        let defocus_radius = focus_dist * (utils::degrees_to_radians(defocus_angle / 2.0)).tan();
-        let defocus_disk_u = u.inner() * defocus_radius;
-        let defocus_disk_v = v.inner() * defocus_radius;
 
         let pixel_samples_scale = match image_options.antialias {
             AntialiasOptions::Disabled => None,
@@ -182,17 +202,13 @@ impl Camera {
         };
 
         Ok(Self {
-            center,
-            focal_length: focus_dist,
+            center: look_from,
+            focal_length,
             vfov,
-            up,
             w,
             u,
             v,
-            focus_dist,
             defocus_angle,
-            defocus_disk_u,
-            defocus_disk_v,
             viewport_u,
             viewport_v,
             pixel_delta_u,
@@ -206,10 +222,23 @@ impl Camera {
         })
     }
 
+    pub fn defocus_radius(&self) -> f64 {
+        self.focal_length * (utils::degrees_to_radians(self.defocus_angle / 2.0)).tan()
+    }
+
+    pub fn defocus_disk_u(&self) -> Vector {
+        self.u.inner() * self.defocus_radius()
+    }
+
+    pub fn defocus_disk_v(&self) -> Vector {
+        self.v.inner() * self.defocus_radius()
+    }
+
     pub fn update_image_options(&mut self, image_options: ImageOptions) {
         self.image_options = image_options;
 
         // Update computed data -- REALLY BAD -- TODO refactor
+        // Only references are for benchmarks right now
         self.pixel_samples_scale = match image_options.antialias {
             AntialiasOptions::Disabled => None,
             AntialiasOptions::Enabled(samples_per_pixel) => Some(1.0 / samples_per_pixel as f64),
@@ -380,7 +409,7 @@ impl Camera {
     fn defocus_disk_sample(&self) -> Point {
         // Returns a random point in the camera defocus disk.
         let p = Vector::random_unit();
-        self.center + (self.defocus_disk_u * p.x()) + (self.defocus_disk_v * p.y())
+        self.center + (self.defocus_disk_u() * p.x()) + (self.defocus_disk_v() * p.y())
     }
 }
 
