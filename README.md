@@ -27,3 +27,10 @@ It wasn't after scrolling through [another project](https://github.com/Dalamar42
 > Well, technically it's the weekend after...
 
 I might get working on this soon.
+
+#### Goals:
+
+- CLI (binary wrapper crate around ray tracing lib)
+  - using a custom scene description language to express the world because regular configuration languages don't let you have required parameters
+    - syntax highlighting + language server (inline hints)
+- As an alternative to the CLI, I'm thinking of exposing a declarative macro `scene! { .. }` from the library crate itself.
