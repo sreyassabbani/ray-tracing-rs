@@ -34,12 +34,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add(bubble)?;
 
     // Output image config, aspect ratio 16:9
-    let image = ImageOptions::new(400, 225).antialias(15);
+    let image = ImageOptions::new(400, 225).antialias(100);
 
     // Camera
-    let vfov = 40.0;
-    let look_from = Point::new(0.0, 0.0, 0.0);
-    let look_at = Point::new(0.0, 0.0, -2.0);
+    let vfov = 20.0;
+    let look_from = Point::new(-2.0, 2.0, 1.0);
+    let look_at = Point::new(0.0, 0.0, -1.0);
     let up = Vector::new(0.0, 1.0, 0.0);
     let defocus_angle = 10.0;
     let focus_dist = 3.4;
@@ -54,6 +54,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         image,
         world,
     )?;
+
+    dbg!(&camera);
 
     camera.render("output.ppm")?;
 

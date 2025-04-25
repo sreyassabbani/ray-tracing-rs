@@ -1,9 +1,12 @@
 //! Module exposing the API for [`Camera`], [`ImageOptions`], [`ViewportOptions`]
 //! Contains logic for writing in PPM format
 
-use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
-use std::path::Path;
+use std::{
+    fmt,
+    fs::{self, OpenOptions},
+    io::{self, Write},
+    path::Path,
+};
 
 use env_logger;
 use log::info;
@@ -73,7 +76,7 @@ impl ImageOptions {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RenderOptions {
     parallel: ParallelOptions,
 }
@@ -126,6 +129,34 @@ pub struct Camera {
     world: HittableList,
 }
 
+impl fmt::Debug for Camera {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Camera")
+            .field("center", &self.center)
+            .field("focal_length", &self.focal_length)
+            .field("vfov", &self.vfov)
+            .field("up", &self.up)
+            .field("v", &self.v)
+            .field("u", &self.u)
+            .field("w", &self.w)
+            .field("viewport_u", &self.viewport_u)
+            .field("viewport_v", &self.viewport_v)
+            .field("pixel_delta_u", &self.pixel_delta_u)
+            .field("pixel_delta_v", &self.pixel_delta_v)
+            .field("defocus_angle", &self.defocus_angle)
+            .field("focus_dist", &self.focus_dist)
+            .field("defocus_disk_u", &self.defocus_disk_u)
+            .field("defocus_disk_v", &self.defocus_disk_v)
+            .field("viewport_upper_left", &self.viewport_upper_left)
+            .field("pixel00_loc", &self.pixel00_loc)
+            .field("pixel_samples_scale", &self.pixel_samples_scale)
+            .field("image_options", &self.image_options)
+            .field("render_options", &self.render_options)
+            // intentionally skipping `.world`
+            .finish()
+    }
+}
+
 impl Camera {
     /// Can only call once
     pub fn new(
@@ -152,9 +183,6 @@ impl Camera {
         let viewport_width =
             viewport_height * (image_options.width as f64 / image_options.height as f64);
 
-        println!("Viewport Width: {}", viewport_width);
-        println!("Viewport Height: {}", viewport_height);
-
         let w = (look_from - look_at).unit();
         let u = up.cross(&w).unit();
         let v = w.cross(&u).assert_unit_unsafe();
@@ -164,9 +192,6 @@ impl Camera {
 
         let pixel_delta_u = viewport_u / image_options.width as f64;
         let pixel_delta_v = viewport_v / image_options.height as f64;
-
-        println!("Pixel Delta U: {:?}", pixel_delta_u);
-        println!("Pixel Delta V: {:?}", pixel_delta_v);
 
         let viewport_upper_left =
             center - (w.inner() * focus_dist) - viewport_u / 2.0 - viewport_v / 2.0;
