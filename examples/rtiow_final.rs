@@ -62,18 +62,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let look_at = Point::new(0.0, 0.0, 0.0);
     let up = Vector::new(0.0, 1.0, 0.0);
     let defocus_angle = 0.6;
-    let focus_dist = 10.0;
 
-    let camera = Camera::new(
-        vfov,
-        defocus_angle,
-        focus_dist,
-        look_from,
-        look_at,
-        up,
-        image,
-        world,
-    )?;
+    let camera = Camera::new(vfov, defocus_angle, look_from, look_at, up, image, world)?;
 
     camera.render("output.ppm")?;
 

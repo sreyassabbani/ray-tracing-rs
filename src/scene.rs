@@ -1,9 +1,12 @@
 //! Module exposing the API for [`Camera`], [`ImageOptions`], [`ViewportOptions`]
 //! Contains logic for writing in PPM format
 
-use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
-use std::path::Path;
+use std::{
+    fmt,
+    fs::{self, OpenOptions},
+    io::{self, Write},
+    path::Path,
+};
 
 use env_logger;
 use log::info;
@@ -73,7 +76,7 @@ impl ImageOptions {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RenderOptions {
     parallel: ParallelOptions,
 }
@@ -136,26 +139,38 @@ impl CameraBuilder {
     }
 }
 
-#[derive(Clone)]
-#[allow(unused)]
-pub struct Camera {
-    center: Point,
-    focal_length: f64,
-    vfov: f64,
-    v: UtVector,
-    u: UtVector,
-    w: UtVector,
-    viewport_u: Vector,
-    viewport_v: Vector,
+#[derive(Clone, Debug)]
+struct Viewport {
+    u: Vector,
+    v: Vector,
     pixel_delta_u: Vector,
     pixel_delta_v: Vector,
+    upper_left: Point,
+}
+
+#[derive(Clone)]
+pub struct Camera {
+    center: Point,
+    focal_vector: Vector,
+    viewport: Viewport,
     defocus_angle: f64,
-    viewport_upper_left: Point,
-    pixel00_loc: Point,
-    pixel_samples_scale: Option<f64>,
     image_options: ImageOptions,
     render_options: RenderOptions,
     world: HittableList,
+}
+
+impl fmt::Debug for Camera {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Camera")
+            .field("center", &self.center)
+            .field("focal_vector", &self.focal_vector)
+            .field("viewport", &self.viewport)
+            .field("defocus_angle", &self.defocus_angle)
+            .field("image_options", &self.image_options)
+            .field("render_options", &self.render_options)
+            // intentionally skipping `.world`
+            .finish()
+    }
 }
 
 impl Camera {
@@ -174,48 +189,35 @@ impl Camera {
         // Set up logger only once
         env_logger::init();
 
-        let focal_length = (look_from - look_at).len();
         let theta = (vfov / 180.0) * std::f64::consts::PI;
 
         let h = (theta / 2.0).tan();
+        let focal_vector = look_from - look_at;
+        let focal_length = focal_vector.len();
         let viewport_height = 2.0 * h * focal_length;
         let viewport_width =
             viewport_height * (image_options.width as f64 / image_options.height as f64);
 
-        let w = (look_from - look_at).unit();
-        let u = up.cross(&w).unit();
-        let v = w.cross(&u).assert_unit_unsafe();
+        let w = focal_vector.unit();
+        let u = up.cross(&w).unit() * viewport_width;
+        let v = u.cross(&w).assert_unit_unsafe() * viewport_height / viewport_width;
 
-        let viewport_u = u.inner() * viewport_width;
-        let viewport_v = -v.inner() * viewport_height;
+        let pixel_delta_u = u / image_options.width as f64;
+        let pixel_delta_v = v / image_options.height as f64;
 
-        let pixel_delta_u = viewport_u / image_options.width as f64;
-        let pixel_delta_v = viewport_v / image_options.height as f64;
-
-        let viewport_upper_left =
-            look_from - (w.inner() * focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
-        let pixel00_loc = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
-
-        let pixel_samples_scale = match image_options.antialias {
-            AntialiasOptions::Disabled => None,
-            AntialiasOptions::Enabled(samples_per_pixel) => Some(1.0 / samples_per_pixel as f64),
-        };
+        let viewport_upper_left = look_from - focal_vector - (u + v) / 2.0;
 
         Ok(Self {
             center: look_from,
-            focal_length,
-            vfov,
-            w,
-            u,
-            v,
+            focal_vector,
+            viewport: Viewport {
+                u,
+                v,
+                pixel_delta_u,
+                pixel_delta_v,
+                upper_left: viewport_upper_left,
+            },
             defocus_angle,
-            viewport_u,
-            viewport_v,
-            pixel_delta_u,
-            pixel_delta_v,
-            viewport_upper_left,
-            pixel00_loc,
-            pixel_samples_scale,
             image_options,
             render_options,
             world,
@@ -223,26 +225,19 @@ impl Camera {
     }
 
     pub fn defocus_radius(&self) -> f64 {
-        self.focal_length * (utils::degrees_to_radians(self.defocus_angle / 2.0)).tan()
+        self.focal_vector.len() * (utils::degrees_to_radians(self.defocus_angle / 2.0)).tan()
     }
 
     pub fn defocus_disk_u(&self) -> Vector {
-        self.u.inner() * self.defocus_radius()
+        self.viewport.u * self.defocus_radius()
     }
 
     pub fn defocus_disk_v(&self) -> Vector {
-        self.v.inner() * self.defocus_radius()
+        self.viewport.v * self.defocus_radius()
     }
 
     pub fn update_image_options(&mut self, image_options: ImageOptions) {
         self.image_options = image_options;
-
-        // Update computed data -- REALLY BAD -- TODO refactor
-        // Only references are for benchmarks right now
-        self.pixel_samples_scale = match image_options.antialias {
-            AntialiasOptions::Disabled => None,
-            AntialiasOptions::Enabled(samples_per_pixel) => Some(1.0 / samples_per_pixel as f64),
-        };
     }
 
     // Need to not make public
@@ -370,7 +365,7 @@ impl Camera {
                     let (ray_origin, ray_dir) = self.get_antialiasing_ray_components(i, j);
                     let r = Ray::new(&ray_origin, ray_dir);
                     // Should never panic
-                    pixel_color += r.color(&self.world, 50) * self.pixel_samples_scale.unwrap();
+                    pixel_color += r.color(&self.world, 50) * (1.0 / samples_per_pixel as f64);
                 }
             }
         }
@@ -378,16 +373,18 @@ impl Camera {
     }
 
     fn get_pixel_center_coordinates(&self, i: u32, j: u32) -> Point {
-        self.pixel00_loc + (self.pixel_delta_u * i as f64) + (self.pixel_delta_v * j as f64)
+        self.viewport.upper_left
+            + (self.viewport.pixel_delta_u * (i as f64 + 0.5))
+            + (self.viewport.pixel_delta_v * (j as f64 + 0.5))
     }
 
     /// Gives a [`Ray`] that is nearby the neighborhood of `i` and `j`. Specifically, at most 0.5 away from real location
     fn get_antialiasing_ray_components(&self, i: u32, j: u32) -> (Point, UtVector) {
         let offset = Self::sample_square();
         // let point_to = self.get_pixel_center_coordinates(i, j) - offset;
-        let point_to = &self.pixel00_loc
-            + (self.pixel_delta_u * (i as f64 + offset.x()))
-            + (self.pixel_delta_v * (j as f64 + offset.y()));
+        let point_to = &self.viewport.upper_left
+            + (self.viewport.pixel_delta_u * (i as f64 + offset.x() + 0.5))
+            + (self.viewport.pixel_delta_v * (j as f64 + offset.y() + 0.5));
         let ray_origin = if self.defocus_angle <= 0.0 {
             self.center.clone()
         } else {

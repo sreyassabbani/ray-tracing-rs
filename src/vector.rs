@@ -164,6 +164,10 @@ mod _utils {
         }
     }
 
+    pub(super) fn mul_utvector_and_scalar(lhs: &UtVector, rhs: f64) -> Vector {
+        Vector::from([lhs.x * rhs, lhs.y * rhs, lhs.z * rhs])
+    }
+
     pub(super) fn add_vector_to_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
         Vector::from([lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z])
     }
@@ -172,7 +176,7 @@ mod _utils {
         Vector::from([lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z])
     }
 
-    pub(super) fn mul_vector_to_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
+    pub(super) fn mul_vector_and_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
         Vector::from([lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z])
     }
 
@@ -383,6 +387,13 @@ impl ops::Add<Vector> for UtVector {
     type Output = Vector;
     fn add(self, rhs: Vector) -> Self::Output {
         add_vector_to_utvector(&rhs, &self)
+    }
+}
+
+impl ops::Mul<f64> for UtVector {
+    type Output = Vector;
+    fn mul(self, rhs: f64) -> Self::Output {
+        mul_utvector_and_scalar(&self, rhs)
     }
 }
 
