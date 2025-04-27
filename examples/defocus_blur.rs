@@ -2,11 +2,13 @@
 //!
 //! Render a example image of defocus blur
 
-use ray_tracing_rs::color::Color;
-use ray_tracing_rs::materials::{Dielectric as Glass, Lambertian as Matte, Metal};
-use ray_tracing_rs::objects::Sphere;
-use ray_tracing_rs::vector::Vector;
-use ray_tracing_rs::{Camera, HittableList, ImageOptions, Point};
+use ray_tracing_rs::{
+    color::Color,
+    materials::{Dielectric as Glass, Lambertian as Matte, Metal},
+    objects::{Plane, Sphere},
+    vector::Vector,
+    {Camera, HittableList, ImageOptions, Point},
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up materials
@@ -17,7 +19,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let material_right = Metal::new(Color::new(0.8, 0.6, 0.2), 1.0);
 
     // Set up objects
-    let ground = Sphere::new(Point::new(0.0, -100.5, -1.0), 100.0, material_ground);
+    // let ground = Sphere::new(Point::new(0.0, -100.5, -1.0), 100.0, material_ground);
+    let ground = Plane::new(Vector::new(0.0, 1.0, 0.0).unit(), 3.5, material_ground);
     let center = Sphere::new(Point::new(0.0, 0.0, -1.2), 0.5, material_center);
     let left = Sphere::new(Point::new(-1.0, 0.0, -1.0), 0.5, material_left);
     let bubble = Sphere::new(Point::new(-1.0, 0.0, -1.0), 0.4, material_bubble);

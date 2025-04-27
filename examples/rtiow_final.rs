@@ -2,12 +2,14 @@
 //!
 //! Render the final Ray Tracing in One Weekend scene
 
-use ray_tracing_rs::color::Color;
-use ray_tracing_rs::materials::{Dielectric as Glass, Lambertian as Matte, Metal};
-use ray_tracing_rs::objects::Sphere;
-use ray_tracing_rs::utils::rand::{random, random_range};
-use ray_tracing_rs::vector::Vector;
-use ray_tracing_rs::{Camera, HittableList, ImageOptions, Point};
+use ray_tracing_rs::{
+    color::Color,
+    materials::{Dielectric as Glass, Lambertian as Matte, Metal},
+    objects::Sphere,
+    utils::rand::{random, random_range},
+    vector::Vector,
+    {Camera, HittableList, ImageOptions, Point},
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut world = HittableList::new();

@@ -2,11 +2,14 @@
 //!
 //! Contains
 //! * [`Sphere`]
+//! * [`Plane`]
 
 #![warn(missing_docs)]
 
+pub mod plane;
 pub mod sphere;
 
+pub use plane::Plane;
 pub use sphere::Sphere;
 
 use std::sync::Arc;
@@ -81,7 +84,9 @@ impl Hittable for HittableList {
     }
 }
 
+/// All objects that interact with rays must implement this trait [`Hittable`].
 pub trait Hittable: Send + Sync {
+    /// Evaluates whether a [`Ray`] hits an object, returning a `Option<HitRecord>`. Implementing this function for all ray-interacting objects is part of the [`Hittable`] trait.
     fn hit(&self, ray_t: Interval, ray: &Ray) -> Option<HitRecord>;
 }
 

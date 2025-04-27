@@ -44,10 +44,12 @@ pub mod interval {
             Self { min, max }
         }
 
+        /// Checks whether `t` is contained within an [`Interval`], exclusive.
         pub fn contains(&self, t: f64) -> bool {
             t > self.min && t < self.max
         }
 
+        /// Checks whether `t` is contained within an [`Interval`], inclusive.
         pub fn contains_inclusive(&self, t: f64) -> bool {
             t >= self.min && t <= self.max
         }

@@ -168,15 +168,19 @@ mod _utils {
         Vector::from([lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z])
     }
 
-    pub(super) fn sub_vector_to_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
+    pub(super) fn sub_vector_by_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
         Vector::from([lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z])
     }
 
-    pub(super) fn mul_vector_to_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
+    pub(super) fn mul_vector_with_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
         Vector::from([lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z])
     }
 
-    pub(super) fn div_vector_to_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
+    pub(super) fn mul_scalar_with_utvector(lhs: f64, rhs: &UtVector) -> Vector {
+        Vector::from([lhs * rhs.x, lhs * rhs.y, lhs * rhs.z])
+    }
+
+    pub(super) fn div_vector_by_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
         Vector::from([lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z])
     }
 }
@@ -398,6 +402,13 @@ impl ops::Neg for &UtVector {
     type Output = UtVector;
     fn neg(self) -> Self::Output {
         neg_utvector(self)
+    }
+}
+
+impl ops::Mul<f64> for &UtVector {
+    type Output = Vector;
+    fn mul(self, rhs: f64) -> Self::Output {
+        mul_scalar_with_utvector(rhs, &self)
     }
 }
 
