@@ -99,6 +99,19 @@ impl Vector {
         }
     }
 
+    pub fn random_in_unit_disk() -> Self {
+        loop {
+            let p = Self::new(
+                rand::random_range(-1.0, 1.0),
+                rand::random_range(-1.0, 1.0),
+                0.0,
+            );
+            if p.len_squared() <= 1.0 {
+                return p;
+            }
+        }
+    }
+
     pub fn random_on_hemisphere(normal: &Self) -> Self {
         let on_unit_sphere = Self::random_unit();
         if on_unit_sphere.dot(normal) > 0.0 {

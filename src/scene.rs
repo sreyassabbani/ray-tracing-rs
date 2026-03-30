@@ -425,7 +425,7 @@ impl Camera {
 
     fn defocus_disk_sample(&self) -> Point {
         // Returns a random point in the camera defocus disk.
-        let p = Vector::random_unit();
+        let p = Vector::random_in_unit_disk();
         self.center + (self.defocus_disk_u * p.x()) + (self.defocus_disk_v * p.y())
     }
 }
