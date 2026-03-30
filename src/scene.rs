@@ -230,7 +230,27 @@ impl Camera {
     pub fn update_image_options(&mut self, image_options: ImageOptions) {
         self.image_options = image_options;
 
-        // Update computed data -- REALLY BAD -- TODO refactor
+        let theta = (self.vfov / 180.0) * std::f64::consts::PI;
+        let h = (theta / 2.0).tan();
+        let viewport_height = 2.0 * h * self.focus_dist;
+        let viewport_width =
+            viewport_height * (image_options.width as f64 / image_options.height as f64);
+
+        self.viewport_u = self.u.inner() * viewport_width;
+        self.viewport_v = -self.v.inner() * viewport_height;
+        self.pixel_delta_u = self.viewport_u / image_options.width as f64;
+        self.pixel_delta_v = self.viewport_v / image_options.height as f64;
+        self.viewport_upper_left =
+            self.center - (self.w.inner() * self.focus_dist) - self.viewport_u / 2.0
+                - self.viewport_v / 2.0;
+        self.pixel00_loc =
+            self.viewport_upper_left + (self.pixel_delta_u + self.pixel_delta_v) * 0.5;
+
+        let defocus_radius =
+            self.focus_dist * (utils::degrees_to_radians(self.defocus_angle / 2.0)).tan();
+        self.defocus_disk_u = self.u.inner() * defocus_radius;
+        self.defocus_disk_v = self.v.inner() * defocus_radius;
+
         self.pixel_samples_scale = match image_options.antialias {
             AntialiasOptions::Disabled => None,
             AntialiasOptions::Enabled(samples_per_pixel) => Some(1.0 / samples_per_pixel as f64),
