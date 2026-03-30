@@ -150,43 +150,51 @@ impl PerspectiveProjection {
     }
 }
 
-/// Lens configuration for a camera.
+/// Optical camera model settings.
 #[derive(Clone, Copy, Debug)]
-pub enum LensSettings {
-    Pinhole { focus_dist: f64 },
-    Defocus { focus_dist: f64, angle_degrees: f64 },
+pub enum CameraModel {
+    Pinhole {
+        focus_dist: f64,
+    },
+    ThinLens {
+        focus_dist: f64,
+        defocus_angle_degrees: f64,
+    },
 }
 
-impl LensSettings {
+impl CameraModel {
     pub fn pinhole(focus_dist: f64) -> Result<Self, ConfigError> {
         validate_focus_dist(focus_dist)?;
         Ok(Self::Pinhole { focus_dist })
     }
 
-    pub fn defocus(focus_dist: f64, angle_degrees: f64) -> Result<Self, ConfigError> {
+    pub fn thin_lens(focus_dist: f64, defocus_angle_degrees: f64) -> Result<Self, ConfigError> {
         validate_focus_dist(focus_dist)?;
-        validate_defocus_angle(angle_degrees)?;
-        Ok(Self::Defocus {
+        validate_defocus_angle(defocus_angle_degrees)?;
+        Ok(Self::ThinLens {
             focus_dist,
-            angle_degrees,
+            defocus_angle_degrees,
         })
     }
 
     fn focus_dist(self) -> f64 {
         match self {
-            Self::Pinhole { focus_dist } | Self::Defocus { focus_dist, .. } => focus_dist,
+            Self::Pinhole { focus_dist } | Self::ThinLens { focus_dist, .. } => focus_dist,
         }
     }
 
     fn defocus_angle(self) -> f64 {
         match self {
             Self::Pinhole { .. } => 0.0,
-            Self::Defocus { angle_degrees, .. } => angle_degrees,
+            Self::ThinLens {
+                defocus_angle_degrees,
+                ..
+            } => defocus_angle_degrees,
         }
     }
 
     fn uses_defocus(self) -> bool {
-        matches!(self, Self::Defocus { .. })
+        matches!(self, Self::ThinLens { .. })
     }
 }
 
@@ -196,7 +204,7 @@ pub struct CameraConfig {
     pose: CameraPose,
     image: ImageOptions,
     projection: PerspectiveProjection,
-    lens: LensSettings,
+    model: CameraModel,
     render: RenderOptions,
 }
 
@@ -205,13 +213,13 @@ impl CameraConfig {
         pose: CameraPose,
         image: ImageOptions,
         projection: PerspectiveProjection,
-        lens: LensSettings,
+        model: CameraModel,
     ) -> Self {
         Self {
             pose,
             image,
             projection,
-            lens,
+            model,
             render: RenderOptions::default(),
         }
     }
@@ -226,7 +234,7 @@ impl CameraConfig {
 pub struct Camera {
     pose: CameraPose,
     projection: PerspectiveProjection,
-    lens: LensSettings,
+    model: CameraModel,
     viewport_u: Vector,
     viewport_v: Vector,
     pixel_delta_u: Vector,
@@ -245,7 +253,7 @@ impl Camera {
         let mut camera = Self {
             pose: config.pose,
             projection: config.projection,
-            lens: config.lens,
+            model: config.model,
             viewport_u: Vector::new(0.0, 0.0, 0.0),
             viewport_v: Vector::new(0.0, 0.0, 0.0),
             pixel_delta_u: Vector::new(0.0, 0.0, 0.0),
@@ -346,7 +354,7 @@ impl Camera {
     fn recompute_geometry(&mut self) {
         let theta = (self.projection.vfov / 180.0) * std::f64::consts::PI;
         let h = (theta / 2.0).tan();
-        let focus_dist = self.lens.focus_dist();
+        let focus_dist = self.model.focus_dist();
         let viewport_height = 2.0 * h * focus_dist;
         let viewport_width = viewport_height * self.image_options.aspect_ratio();
 
@@ -362,7 +370,7 @@ impl Camera {
             self.viewport_upper_left + (self.pixel_delta_u + self.pixel_delta_v) * 0.5;
 
         let defocus_radius =
-            focus_dist * (utils::degrees_to_radians(self.lens.defocus_angle() / 2.0)).tan();
+            focus_dist * (utils::degrees_to_radians(self.model.defocus_angle() / 2.0)).tan();
         self.defocus_disk_u = self.pose.u.inner() * defocus_radius;
         self.defocus_disk_v = self.pose.v.inner() * defocus_radius;
 
@@ -460,7 +468,7 @@ impl Camera {
         match self.image_options.antialias {
             Disabled => {
                 let pixel_center = self.get_pixel_center_coordinates(i, j);
-                let ray_origin = if self.lens.uses_defocus() {
+                let ray_origin = if self.model.uses_defocus() {
                     self.defocus_disk_sample()
                 } else {
                     self.pose.center
@@ -489,7 +497,7 @@ impl Camera {
         let point_to = self.pixel00_loc
             + (self.pixel_delta_u * (i as f64 + offset.x()))
             + (self.pixel_delta_v * (j as f64 + offset.y()));
-        let ray_origin = if self.lens.uses_defocus() {
+        let ray_origin = if self.model.uses_defocus() {
             self.defocus_disk_sample()
         } else {
             self.pose.center

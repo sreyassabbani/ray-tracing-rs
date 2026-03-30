@@ -7,7 +7,7 @@ use ray_tracing_rs::objects::Sphere;
 use ray_tracing_rs::scene::{ParallelOptions, RenderOptions};
 use ray_tracing_rs::vector::Vector;
 use ray_tracing_rs::{
-    Camera, CameraConfig, CameraPose, HittableList, ImageOptions, LensSettings,
+    Camera, CameraConfig, CameraModel, CameraPose, HittableList, ImageOptions,
     PerspectiveProjection, Point,
 };
 
@@ -32,8 +32,8 @@ fn basic_world(c: &mut Criterion) {
     )
     .unwrap();
     let projection = PerspectiveProjection::new(90.0).unwrap();
-    let lens = LensSettings::defocus(1.0, 10.0).unwrap();
-    let config = CameraConfig::new(pose, image, projection, lens);
+    let model = CameraModel::thin_lens(1.0, 10.0).unwrap();
+    let config = CameraConfig::new(pose, image, projection, model);
     let mut camera = Camera::new(config);
 
     // Bench for different samples per pixel (SPP)

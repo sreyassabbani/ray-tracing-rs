@@ -8,7 +8,7 @@ use ray_tracing_rs::{
     objects::{Plane, Sphere},
     vector::Vector,
     {
-        Camera, CameraConfig, CameraPose, HittableList, ImageOptions, LensSettings,
+        Camera, CameraConfig, CameraModel, CameraPose, HittableList, ImageOptions,
         PerspectiveProjection, Point,
     },
 };
@@ -51,8 +51,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Vector::new(0.0, 1.0, 0.0),
     )?;
     let projection = PerspectiveProjection::new(20.0)?;
-    let lens = LensSettings::defocus(3.4, 10.0)?;
-    let config = CameraConfig::new(pose, image, projection, lens);
+    let model = CameraModel::thin_lens(3.4, 10.0)?;
+    let config = CameraConfig::new(pose, image, projection, model);
     let camera = Camera::new(config);
 
     camera.render(&world, "output.ppm")?;

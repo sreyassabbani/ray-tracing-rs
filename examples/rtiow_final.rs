@@ -9,7 +9,7 @@ use ray_tracing_rs::{
     utils::rand::{random, random_range},
     vector::Vector,
     {
-        Camera, CameraConfig, CameraPose, HittableList, ImageOptions, LensSettings,
+        Camera, CameraConfig, CameraModel, CameraPose, HittableList, ImageOptions,
         PerspectiveProjection, Point,
     },
 };
@@ -70,8 +70,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Vector::new(0.0, 1.0, 0.0),
     )?;
     let projection = PerspectiveProjection::new(20.0)?;
-    let lens = LensSettings::defocus(10.0, 0.6)?;
-    let config = CameraConfig::new(pose, image, projection, lens);
+    let model = CameraModel::thin_lens(10.0, 0.6)?;
+    let config = CameraConfig::new(pose, image, projection, model);
     let camera = Camera::new(config);
 
     camera.render(&world, "output.ppm")?;
