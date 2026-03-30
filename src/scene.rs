@@ -1,4 +1,11 @@
 //! Camera configuration and rendering API.
+//!
+//! The public flow is:
+//! 1. Build validated camera inputs such as [`CameraPose`], [`PerspectiveProjection`],
+//!    [`CameraModel`], and [`ImageOptions`].
+//! 2. Assemble them into a [`CameraConfig`].
+//! 3. Build a reusable [`Camera`].
+//! 4. Render that camera against any world implementing [`Hittable`].
 
 use std::{
     fs::{self, OpenOptions},
@@ -16,7 +23,11 @@ use crate::ray::Ray;
 use crate::utils::{self, rand};
 use crate::vector::{Point, UtVector, Vector};
 
-/// [`ImageOptions`] configures a rendered image.
+/// Output image dimensions and sampling settings used by a [`Camera`].
+///
+/// Dimensions are validated up front so a camera can safely accept fresh
+/// [`ImageOptions`] later through [`Camera::set_image_options`] without needing
+/// to return an error.
 #[derive(Copy, Clone, Debug)]
 pub struct ImageOptions {
     width: u32,
@@ -24,7 +35,7 @@ pub struct ImageOptions {
     antialias: AntialiasOptions,
 }
 
-/// Can be used as additional configuration for [`ImageOptions`].
+/// Internal antialiasing mode for [`ImageOptions`].
 #[derive(Debug, Clone, Copy)]
 enum AntialiasOptions {
     Disabled,
@@ -33,6 +44,14 @@ enum AntialiasOptions {
 
 impl ImageOptions {
     /// Create a new set of image options.
+    ///
+    /// Returns [`ConfigError::InvalidImageDimensions`] when either dimension is 0.
+    ///
+    /// ```rs
+    /// # use ray_tracing_rs::ImageOptions;
+    /// let image = ImageOptions::new(1200, 675)?.antialias(50);
+    /// # Ok::<(), ray_tracing_rs::ConfigError>(())
+    /// ```
     pub fn new(width: u32, height: u32) -> Result<Self, ConfigError> {
         if width == 0 || height == 0 {
             return Err(ConfigError::InvalidImageDimensions);
@@ -45,13 +64,20 @@ impl ImageOptions {
         })
     }
 
+    /// Return the image aspect ratio as `width / height`.
     pub fn aspect_ratio(&self) -> f64 {
         self.width as f64 / self.height as f64
     }
 
-    /// Use for smoothening rough edges and color differences.
+    /// Configure antialiasing samples per pixel.
     ///
-    /// Specify samples per pixel (SPP). Specifying 0 will disable antialiasing.
+    /// Specifying 0 disables antialiasing, which is also the default.
+    ///
+    /// ```rs
+    /// # use ray_tracing_rs::ImageOptions;
+    /// let image = ImageOptions::new(800, 450)?.antialias(10);
+    /// # Ok::<(), ray_tracing_rs::ConfigError>(())
+    /// ```
     pub fn antialias(mut self, spp: u32) -> Self {
         if spp == 0 {
             self.antialias = AntialiasOptions::Disabled;
@@ -62,6 +88,10 @@ impl ImageOptions {
     }
 }
 
+/// Render-time scheduling options.
+///
+/// These do not change the rays a camera emits, only how the pixel work is
+/// scheduled and written.
 #[derive(Clone, Debug)]
 pub struct RenderOptions {
     parallel: ParallelOptions,
@@ -78,12 +108,14 @@ pub enum ParallelOptions {
 }
 
 impl RenderOptions {
+    /// Create render options using [`ParallelOptions::ByRows`].
     pub fn new() -> Self {
         Self {
             parallel: ParallelOptions::ByRows,
         }
     }
 
+    /// Override the rendering strategy.
     pub fn parallel(mut self, config: ParallelOptions) -> Self {
         self.parallel = config;
         self
@@ -96,7 +128,10 @@ impl Default for RenderOptions {
     }
 }
 
-/// Camera orientation and basis vectors.
+/// Validated camera orientation and basis vectors.
+///
+/// This stores the camera position along with the orthonormal basis derived
+/// from `look_from`, `look_at`, and `up`.
 #[derive(Clone, Copy, Debug)]
 pub struct CameraPose {
     center: Point,
@@ -106,6 +141,11 @@ pub struct CameraPose {
 }
 
 impl CameraPose {
+    /// Build a camera pose from the usual "look at" inputs.
+    ///
+    /// This validates the geometric constraints that depend on several inputs at
+    /// once: the camera position must differ from the target, and `up` must not
+    /// be parallel to the viewing direction.
     pub fn look_at(look_from: Point, look_at: Point, up: Vector) -> Result<Self, ConfigError> {
         if !look_from.is_finite() || !look_at.is_finite() || !up.is_finite() {
             return Err(ConfigError::NonFinitePose);
@@ -134,13 +174,16 @@ impl CameraPose {
     }
 }
 
-/// Perspective projection settings for a camera.
+/// Validated perspective projection settings for a camera.
 #[derive(Clone, Copy, Debug)]
 pub struct PerspectiveProjection {
     vfov: f64,
 }
 
 impl PerspectiveProjection {
+    /// Create a perspective projection from a vertical field of view in degrees.
+    ///
+    /// Valid values are finite numbers strictly between 0 and 180.
     pub fn new(vfov_degrees: f64) -> Result<Self, ConfigError> {
         if !vfov_degrees.is_finite() || vfov_degrees <= 0.0 || vfov_degrees >= 180.0 {
             return Err(ConfigError::InvalidFieldOfView);
@@ -151,6 +194,9 @@ impl PerspectiveProjection {
 }
 
 /// Optical camera model settings.
+///
+/// [`CameraModel::Pinhole`] disables depth-of-field blur. [`CameraModel::ThinLens`]
+/// enables it by sampling a defocus disk.
 #[derive(Clone, Copy, Debug)]
 pub enum CameraModel {
     Pinhole {
@@ -163,11 +209,15 @@ pub enum CameraModel {
 }
 
 impl CameraModel {
+    /// Create a pinhole camera model with a validated focus distance.
     pub fn pinhole(focus_dist: f64) -> Result<Self, ConfigError> {
         validate_focus_dist(focus_dist)?;
         Ok(Self::Pinhole { focus_dist })
     }
 
+    /// Create a thin-lens camera model with depth-of-field blur.
+    ///
+    /// Both `focus_dist` and `defocus_angle_degrees` are validated.
     pub fn thin_lens(focus_dist: f64, defocus_angle_degrees: f64) -> Result<Self, ConfigError> {
         validate_focus_dist(focus_dist)?;
         validate_defocus_angle(defocus_angle_degrees)?;
@@ -198,7 +248,10 @@ impl CameraModel {
     }
 }
 
-/// Complete camera input configuration.
+/// Complete validated camera input configuration.
+///
+/// [`CameraConfig`] groups the stable user-controlled inputs. The expensive,
+/// derived geometry lives on [`Camera`] itself.
 #[derive(Clone, Debug)]
 pub struct CameraConfig {
     pose: CameraPose,
@@ -209,6 +262,9 @@ pub struct CameraConfig {
 }
 
 impl CameraConfig {
+    /// Assemble the validated inputs required to build a [`Camera`].
+    ///
+    /// Render options default to [`RenderOptions::default`].
     pub fn new(
         pose: CameraPose,
         image: ImageOptions,
@@ -224,12 +280,17 @@ impl CameraConfig {
         }
     }
 
+    /// Override the render-time scheduling policy.
     pub fn render(mut self, render: RenderOptions) -> Self {
         self.render = render;
         self
     }
 }
 
+/// A reusable camera with precomputed geometry.
+///
+/// A [`Camera`] is independent from any particular scene. The same camera can
+/// render multiple worlds, and multiple cameras can render the same world.
 #[derive(Clone, Debug)]
 pub struct Camera {
     pose: CameraPose,
@@ -249,6 +310,7 @@ pub struct Camera {
 }
 
 impl Camera {
+    /// Build a camera from a fully validated [`CameraConfig`].
     pub fn new(config: CameraConfig) -> Self {
         let mut camera = Self {
             pose: config.pose,
@@ -270,15 +332,21 @@ impl Camera {
         camera
     }
 
+    /// Replace the image settings and recompute the derived camera geometry.
     pub fn set_image_options(&mut self, image_options: ImageOptions) {
         self.image_options = image_options;
         self.recompute_geometry();
     }
 
+    /// Replace only the render scheduling options.
     pub fn set_render_options(&mut self, render_options: RenderOptions) {
         self.render_options = render_options;
     }
 
+    /// Render the camera to a P3 PPM file.
+    ///
+    /// The scene is passed in explicitly so camera configuration stays separate
+    /// from world ownership.
     pub fn render<T: AsRef<Path>>(
         &self,
         world: &dyn Hittable,
@@ -302,6 +370,10 @@ impl Camera {
         Ok(())
     }
 
+    /// Render the camera into memory without writing a file.
+    ///
+    /// This is useful for tests and benchmarks that want to measure ray
+    /// generation and shading without including file I/O.
     pub fn render_in_memory(&self, world: &dyn Hittable) -> Vec<Color> {
         use ParallelOptions::*;
         match self.render_options.parallel {
@@ -534,6 +606,7 @@ fn validate_defocus_angle(angle_degrees: f64) -> Result<(), ConfigError> {
     Ok(())
 }
 
+/// Errors returned while validating public camera configuration inputs.
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ConfigError {
     #[error("image width and height must both be greater than zero")]
