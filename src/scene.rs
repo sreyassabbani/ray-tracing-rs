@@ -142,7 +142,7 @@ pub struct PerspectiveProjection {
 
 impl PerspectiveProjection {
     pub fn new(vfov_degrees: f64) -> Result<Self, ConfigError> {
-        if !vfov_degrees.is_finite() || !(0.0..180.0).contains(&vfov_degrees) {
+        if !vfov_degrees.is_finite() || vfov_degrees <= 0.0 || vfov_degrees >= 180.0 {
             return Err(ConfigError::InvalidFieldOfView);
         }
 
@@ -528,13 +528,13 @@ fn validate_focus_dist(focus_dist: f64) -> Result<(), ConfigError> {
 }
 
 fn validate_defocus_angle(angle_degrees: f64) -> Result<(), ConfigError> {
-    if !angle_degrees.is_finite() || !(0.0..180.0).contains(&angle_degrees) {
+    if !angle_degrees.is_finite() || angle_degrees <= 0.0 || angle_degrees >= 180.0 {
         return Err(ConfigError::InvalidDefocusAngle);
     }
     Ok(())
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ConfigError {
     #[error("image width and height must both be greater than zero")]
     InvalidImageDimensions,
