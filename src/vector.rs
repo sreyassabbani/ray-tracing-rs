@@ -115,9 +115,9 @@ impl Vector {
     pub fn random_on_hemisphere(normal: &Self) -> Self {
         let on_unit_sphere = Self::random_unit();
         if on_unit_sphere.dot(normal) > 0.0 {
-            return on_unit_sphere;
+            on_unit_sphere
         } else {
-            return on_unit_sphere * -1.0;
+            on_unit_sphere * -1.0
         }
     }
 }
@@ -181,20 +181,8 @@ mod _utils {
         Vector::from([lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z])
     }
 
-    pub(super) fn sub_vector_by_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
-        Vector::from([lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z])
-    }
-
-    pub(super) fn mul_vector_with_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
-        Vector::from([lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z])
-    }
-
     pub(super) fn mul_scalar_with_utvector(lhs: f64, rhs: &UtVector) -> Vector {
         Vector::from([lhs * rhs.x, lhs * rhs.y, lhs * rhs.z])
-    }
-
-    pub(super) fn div_vector_by_utvector(lhs: &Vector, rhs: &UtVector) -> Vector {
-        Vector::from([lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z])
     }
 }
 
@@ -230,7 +218,7 @@ impl ops::Add<&Vector> for &Vector {
     type Output = Vector;
 
     fn add(self, rhs: &Vector) -> Self::Output {
-        add_vectors(&self, &rhs)
+        add_vectors(self, rhs)
     }
 }
 
@@ -269,7 +257,7 @@ impl ops::Sub<&Vector> for &Vector {
     type Output = Vector;
 
     fn sub(self, rhs: &Vector) -> Self::Output {
-        sub_vectors(&self, &rhs)
+        sub_vectors(self, rhs)
     }
 }
 
@@ -421,7 +409,7 @@ impl ops::Neg for &UtVector {
 impl ops::Mul<f64> for &UtVector {
     type Output = Vector;
     fn mul(self, rhs: f64) -> Self::Output {
-        mul_scalar_with_utvector(rhs, &self)
+        mul_scalar_with_utvector(rhs, self)
     }
 }
 

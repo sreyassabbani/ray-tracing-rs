@@ -6,7 +6,9 @@
 
 #![warn(missing_docs)]
 
+/// Plane primitives.
 pub mod plane;
+/// Sphere primitives.
 pub mod sphere;
 
 pub use plane::Plane;
@@ -21,6 +23,7 @@ use crate::ray::Ray;
 use crate::utils::interval::Interval;
 use crate::vector::{Point, UtVector};
 
+/// Information about a ray/object intersection.
 pub struct HitRecord {
     pub(super) point: Point,
     pub(super) normal: UtVector,
@@ -31,19 +34,27 @@ pub struct HitRecord {
 }
 
 impl HitRecord {
+    /// Flip a surface normal so it always faces against the incoming ray.
     pub fn face_normal(&mut self, ray: &Ray, outward_normal: &UtVector) {
         self.front_face = ray.dir_v().dot(outward_normal) < 0.0;
 
         self.normal = if self.front_face {
-            outward_normal.clone()
+            *outward_normal
         } else {
             -outward_normal
         };
     }
 }
 
+/// A collection of hittable objects treated as a single world.
 #[derive(Clone)]
 pub struct HittableList(Vec<Arc<dyn Hittable>>);
+
+impl Default for HittableList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl HittableList {
     /// Create a new [`HittableList`]
@@ -91,4 +102,5 @@ pub trait Hittable: Send + Sync {
 }
 
 #[derive(Debug, Error)]
+/// Placeholder error type for hittable list operations.
 pub enum Error {}

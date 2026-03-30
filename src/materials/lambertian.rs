@@ -23,7 +23,7 @@ impl Material for Lambertian {
         // Non-Lambertian implementation:
         // let direction = &record.normal + &Vector::random_on_hemisphere(&record.normal);
 
-        let scatter_direction = (record.normal.inner() + &Vector::random_unit()).unit();
+        let scatter_direction = (record.normal.inner() + Vector::random_unit()).unit();
         let scattered_ray = Ray::new(&record.point, scatter_direction);
         RayInteraction::Scattered(EmergentRay {
             attenuation: self.albedo,

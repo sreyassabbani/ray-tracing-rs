@@ -60,8 +60,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         world,
     )?;
 
-    dbg!(&camera);
-
     camera.render("output.ppm")?;
 
     Ok(())

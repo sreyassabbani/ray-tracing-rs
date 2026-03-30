@@ -6,6 +6,7 @@ use crate::ray::Ray;
 use crate::utils::interval::Interval;
 use crate::vector::Point;
 
+/// A sphere hittable by rays.
 pub struct Sphere {
     center: Point,
     radius: f64,
@@ -13,6 +14,7 @@ pub struct Sphere {
 }
 
 impl Sphere {
+    /// Create a new [`Sphere`] with a center, radius, and material.
     // Should I take `Arc<Box<dyn Material>>` instead? Little worried about `'static` and maybe there's a way around not enforcing static lifetime of the material.
     // See other ways if possible
     pub fn new(center: Point, radius: f64, material: impl Material + 'static) -> Self {
@@ -26,7 +28,7 @@ impl Sphere {
 
 impl Hittable for Sphere {
     fn hit(&self, ray_t: Interval, ray: &Ray) -> Option<HitRecord> {
-        let oc = &self.center - ray.origin();
+        let oc = self.center - ray.origin();
         let a = ray.dir_v().len_squared();
         let h = oc.dot(ray.dir_v());
         let c = oc.len_squared() - self.radius.powi(2);

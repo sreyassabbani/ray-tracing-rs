@@ -7,7 +7,6 @@ use super::RayInteraction;
 use crate::color::Color;
 use crate::objects::HitRecord;
 use crate::ray::Ray;
-use crate::vector::Vector;
 
 pub struct Dielectric {
     ior: f64,

@@ -3,7 +3,7 @@
 //! Closely related to [`crate::material`] module. That module exports the type [`EmergentRay`] (design decisions on this might need to be reviewed).
 
 use crate::color::Color;
-use crate::materials::{Material, RayInteraction};
+use crate::materials::RayInteraction;
 use crate::objects::{Hittable, HittableList};
 use crate::utils::interval::Interval;
 use crate::vector::{Point, UtVector, Vector};
@@ -36,7 +36,7 @@ impl<'o> Ray<'o> {
     }
 
     pub fn at(&self, t: f64) -> Point {
-        self.origin + &(self.dir.inner() * t)
+        self.origin + (self.dir.inner() * t)
     }
 
     pub fn color(&self, world: &HittableList, bounce: u32) -> Color {
@@ -51,12 +51,9 @@ impl<'o> Ray<'o> {
                 use RayInteraction::*;
                 // Self interacts with material, and send in corresponding record of its interaction (awkward)
                 match record.material.interact(self, &record) {
-                    Absorbed => {
-                        return Color::new(0.0, 0.0, 0.0);
-                    }
+                    Absorbed => Color::new(0.0, 0.0, 0.0),
                     Scattered(emergent_ray) => {
-                        return emergent_ray.attenuation
-                            * emergent_ray.inner.color(world, bounce - 1)
+                        emergent_ray.attenuation * emergent_ray.inner.color(world, bounce - 1)
                     }
                 }
             }

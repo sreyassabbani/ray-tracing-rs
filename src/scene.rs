@@ -103,6 +103,12 @@ impl RenderOptions {
     }
 }
 
+impl Default for RenderOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone)]
 pub struct Camera {
     center: Point,
@@ -157,6 +163,7 @@ impl fmt::Debug for Camera {
 }
 
 impl Camera {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         vfov: f64,
         defocus_angle: f64,
@@ -419,7 +426,7 @@ impl Camera {
         for j in 0..self.image_options.height {
             info!(
                 "Scanlines remaining: {}",
-                self.image_options.height - (j as u32 / self.image_options.width)
+                self.image_options.height - j
             );
             io::stdout().flush().unwrap();
             for i in 0..self.image_options.width {
@@ -467,11 +474,11 @@ impl Camera {
     fn get_antialiasing_ray_components(&self, i: u32, j: u32) -> (Point, UtVector) {
         let offset = Self::sample_square();
         // let point_to = self.get_pixel_center_coordinates(i, j) - offset;
-        let point_to = &self.pixel00_loc
+        let point_to = self.pixel00_loc
             + (self.pixel_delta_u * (i as f64 + offset.x()))
             + (self.pixel_delta_v * (j as f64 + offset.y()));
         let ray_origin = if self.defocus_angle <= 0.0 {
-            self.center.clone()
+            self.center
         } else {
             self.defocus_disk_sample()
         };
