@@ -12,6 +12,8 @@ use ray_tracing_rs::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = env_logger::try_init();
+
     let mut world = HittableList::new();
     let ground_material = Matte::new(Color::new(0.5, 0.5, 0.5));
     world.add(Sphere::new(
