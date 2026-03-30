@@ -69,7 +69,7 @@ impl Vector {
     }
 
     pub fn is_unit(self) -> Result<UtVector, Error> {
-        if self.len_squared() != 1.0 {
+        if (self.len_squared() - 1.0).abs() > 1e-12 {
             return Err(Error::NotUnitVector);
         }
         Ok(UtVector { v: self })

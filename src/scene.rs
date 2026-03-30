@@ -157,7 +157,6 @@ impl fmt::Debug for Camera {
 }
 
 impl Camera {
-    /// Can only call once
     pub fn new(
         vfov: f64,
         defocus_angle: f64,
@@ -170,8 +169,17 @@ impl Camera {
     ) -> Result<Self, Error> {
         let render_options = RenderOptions::new();
 
+        if image_options.width == 0 || image_options.height == 0 {
+            return Err(Error::InvalidImageDimensions);
+        }
+        if !(0.0..180.0).contains(&vfov) {
+            return Err(Error::InvalidFieldOfView);
+        }
+        if focus_dist <= 0.0 {
+            return Err(Error::InvalidFocusDistance);
+        }
+
         let center = look_from;
-        // let focal_length = (look_from - look_at).len();
         let theta = (vfov / 180.0) * std::f64::consts::PI;
 
         let h = (theta / 2.0).tan();
@@ -179,9 +187,18 @@ impl Camera {
         let viewport_width =
             viewport_height * (image_options.width as f64 / image_options.height as f64);
 
-        let w = (look_from - look_at).unit();
-        let u = up.cross(&w).unit();
-        let v = w.cross(&u).assert_unit_unsafe();
+        let view_direction = look_from - look_at;
+        if view_direction.len_squared() <= 1e-12 {
+            return Err(Error::DegenerateViewDirection);
+        }
+        let w = view_direction.unit();
+
+        let u_direction = up.cross(&w);
+        if u_direction.len_squared() <= 1e-12 {
+            return Err(Error::UpVectorParallelToView);
+        }
+        let u = u_direction.unit();
+        let v = w.cross(&u).unit();
 
         let viewport_u = u.inner() * viewport_width;
         let viewport_v = -v.inner() * viewport_height;
@@ -479,4 +496,15 @@ impl Camera {
 }
 
 #[derive(Error, Debug)]
-pub enum Error {}
+pub enum Error {
+    #[error("image width and height must both be greater than zero")]
+    InvalidImageDimensions,
+    #[error("vertical field of view must be between 0 and 180 degrees")]
+    InvalidFieldOfView,
+    #[error("focus distance must be greater than zero")]
+    InvalidFocusDistance,
+    #[error("look_from and look_at must not be the same point")]
+    DegenerateViewDirection,
+    #[error("up vector must not be parallel to the view direction")]
+    UpVectorParallelToView,
+}
