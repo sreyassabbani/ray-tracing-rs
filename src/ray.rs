@@ -4,7 +4,7 @@
 
 use crate::color::Color;
 use crate::materials::RayInteraction;
-use crate::objects::{Hittable, HittableList};
+use crate::objects::Hittable;
 use crate::utils::interval::Interval;
 use crate::vector::{Point, UtVector, Vector};
 
@@ -39,7 +39,7 @@ impl<'o> Ray<'o> {
         self.origin + (self.dir.inner() * t)
     }
 
-    pub fn color(&self, world: &HittableList, bounce: u32) -> Color {
+    pub fn color(&self, world: &dyn Hittable, bounce: u32) -> Color {
         // Limit the number of child rays
         if bounce == 0 {
             return Color::new(0.0, 0.0, 0.0);

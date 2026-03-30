@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use thiserror::Error;
 
 use crate::color::Color;
-use crate::objects::HittableList;
+use crate::objects::Hittable;
 use crate::ray::Ray;
 use crate::utils::{self, rand};
 use crate::vector::{Point, UtVector, Vector};
@@ -281,7 +281,7 @@ impl Camera {
 
     pub fn render<T: AsRef<Path>>(
         &self,
-        world: &HittableList,
+        world: &dyn Hittable,
         path: T,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut file = OpenOptions::new()
@@ -302,7 +302,7 @@ impl Camera {
         Ok(())
     }
 
-    pub fn render_in_memory(&self, world: &HittableList) -> Vec<Color> {
+    pub fn render_in_memory(&self, world: &dyn Hittable) -> Vec<Color> {
         use ParallelOptions::*;
         match self.render_options.parallel {
             AllAtOnce => {
@@ -395,7 +395,7 @@ impl Camera {
 
     fn render_parallel_all(
         &self,
-        world: &HittableList,
+        world: &dyn Hittable,
         file: &mut fs::File,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut pixels = vec![
@@ -425,7 +425,7 @@ impl Camera {
 
     fn render_parallel_by_rows(
         &self,
-        world: &HittableList,
+        world: &dyn Hittable,
         file: &mut fs::File,
     ) -> Result<(), Box<dyn std::error::Error>> {
         for j in 0..self.image_options.height {
@@ -446,7 +446,7 @@ impl Camera {
 
     fn render_sequential(
         &self,
-        world: &HittableList,
+        world: &dyn Hittable,
         file: &mut fs::File,
     ) -> Result<(), Box<dyn std::error::Error>> {
         for j in 0..self.image_options.height {
@@ -461,7 +461,7 @@ impl Camera {
         Ok(())
     }
 
-    fn pixel_color_at(&self, world: &HittableList, i: u32, j: u32) -> Color {
+    fn pixel_color_at(&self, world: &dyn Hittable, i: u32, j: u32) -> Color {
         let mut pixel_color = Color::new(0.0, 0.0, 0.0);
 
         use AntialiasOptions::*;
