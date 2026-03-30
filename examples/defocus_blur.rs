@@ -11,6 +11,8 @@ use ray_tracing_rs::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = env_logger::try_init();
+
     // Set up materials
     let material_ground = Matte::new(Color::new(0.8, 0.8, 0.0));
     let material_center = Matte::new(Color::new(0.1, 0.2, 0.5));

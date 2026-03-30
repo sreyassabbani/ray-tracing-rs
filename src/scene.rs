@@ -8,7 +8,6 @@ use std::{
     path::Path,
 };
 
-use env_logger;
 use log::info;
 
 use thiserror::Error;
@@ -170,9 +169,6 @@ impl Camera {
         world: HittableList,
     ) -> Result<Self, Error> {
         let render_options = RenderOptions::new();
-
-        // Set up logger only once
-        env_logger::init();
 
         let center = look_from;
         // let focal_length = (look_from - look_at).len();
