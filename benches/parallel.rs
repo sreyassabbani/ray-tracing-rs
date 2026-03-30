@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
 
 use ray_tracing_rs::color::Color;
 use ray_tracing_rs::materials::Lambertian;
@@ -39,7 +40,7 @@ fn basic_world(c: &mut Criterion) {
                     let image_options = image.clone().antialias(spp);
                     camera.update_render_options(render_options);
                     camera.update_image_options(image_options);
-                    camera.render("output.ppm")
+                    black_box(camera.render_in_memory())
                 })
             },
         );
@@ -53,7 +54,7 @@ fn basic_world(c: &mut Criterion) {
                     let image_options = image.clone().antialias(spp);
                     camera.update_render_options(render_options);
                     camera.update_image_options(image_options);
-                    camera.render("output.ppm")
+                    black_box(camera.render_in_memory())
                 })
             },
         );
@@ -67,7 +68,7 @@ fn basic_world(c: &mut Criterion) {
                     let image_options = image.clone().antialias(spp);
                     camera.update_render_options(render_options);
                     camera.update_image_options(image_options);
-                    camera.render("output.ppm")
+                    black_box(camera.render_in_memory())
                 })
             },
         );

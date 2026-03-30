@@ -283,6 +283,54 @@ impl Camera {
         Ok(())
     }
 
+    pub fn render_in_memory(&self) -> Vec<Color> {
+        use ParallelOptions::*;
+        match self.render_options.parallel {
+            AllAtOnce => {
+                let mut pixels = vec![
+                    Color::new(0.0, 0.0, 0.0);
+                    (self.image_options.height * self.image_options.width) as usize
+                ];
+
+                pixels.par_iter_mut().enumerate().for_each(|(i, v)| {
+                    let x = (i as u32) % self.image_options.width;
+                    let y = (i as u32) / self.image_options.width;
+                    *v = self.pixel_color_at(x, y);
+                });
+
+                pixels
+            }
+            ByRows => {
+                let mut pixels = Vec::with_capacity(
+                    (self.image_options.height * self.image_options.width) as usize,
+                );
+
+                for j in 0..self.image_options.height {
+                    let row_pixels: Vec<_> = (0..self.image_options.width)
+                        .into_par_iter()
+                        .map(|i| self.pixel_color_at(i, j))
+                        .collect();
+                    pixels.extend(row_pixels);
+                }
+
+                pixels
+            }
+            Series => {
+                let mut pixels = Vec::with_capacity(
+                    (self.image_options.height * self.image_options.width) as usize,
+                );
+
+                for j in 0..self.image_options.height {
+                    for i in 0..self.image_options.width {
+                        pixels.push(self.pixel_color_at(i, j));
+                    }
+                }
+
+                pixels
+            }
+        }
+    }
+
     /// Internal function to write P3 PPM header
     fn write_ppm_p3_header(&self, file: &mut fs::File) -> Result<(), Box<dyn std::error::Error>> {
         // P3 PPM header
