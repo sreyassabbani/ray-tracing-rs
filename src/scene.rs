@@ -373,8 +373,13 @@ impl Camera {
         match self.image_options.antialias {
             Disabled => {
                 let pixel_center = self.get_pixel_center_coordinates(i, j);
-                let ray_direction = pixel_center - self.center;
-                let r = Ray::new(&self.center, ray_direction.unit());
+                let ray_origin = if self.defocus_angle <= 0.0 {
+                    self.center
+                } else {
+                    self.defocus_disk_sample()
+                };
+                let ray_direction = (pixel_center - ray_origin).unit();
+                let r = Ray::new(&ray_origin, ray_direction);
                 pixel_color += r.color(&self.world, 50);
             }
             Enabled(samples_per_pixel) => {
