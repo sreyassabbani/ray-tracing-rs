@@ -8,7 +8,10 @@ pub mod scene;
 pub mod vector;
 
 pub use objects::HittableList;
-pub use scene::{Camera, ImageOptions};
+pub use scene::{
+    Camera, CameraConfig, CameraPose, ConfigError, ImageOptions, LensSettings,
+    PerspectiveProjection,
+};
 pub use vector::Point;
 
 // Probly should revert back to being private

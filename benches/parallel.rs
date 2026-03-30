@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
 use ray_tracing_rs::color::Color;
@@ -6,7 +6,10 @@ use ray_tracing_rs::materials::Lambertian;
 use ray_tracing_rs::objects::Sphere;
 use ray_tracing_rs::scene::{ParallelOptions, RenderOptions};
 use ray_tracing_rs::vector::Vector;
-use ray_tracing_rs::{Camera, HittableList, ImageOptions, Point};
+use ray_tracing_rs::{
+    Camera, CameraConfig, CameraPose, HittableList, ImageOptions, LensSettings,
+    PerspectiveProjection, Point,
+};
 
 use std::time::Duration;
 
@@ -21,12 +24,17 @@ fn basic_world(c: &mut Criterion) {
     world.add(sphere).unwrap();
     world.add(ground).unwrap();
 
-    let image = ImageOptions::new(16, 9);
-    let vfov = 90.0;
-    let look_from = Point::new(-0.0, 0.0, 0.0);
-    let look_at = Point::new(0.0, 0.0, -1.0);
-    let up = Vector::new(0.0, 1.0, 0.0);
-    let mut camera = Camera::new(vfov, 10.0, 1.0, look_from, look_at, up, image, world).unwrap();
+    let image = ImageOptions::new(16, 9).unwrap();
+    let pose = CameraPose::look_at(
+        Point::new(-0.0, 0.0, 0.0),
+        Point::new(0.0, 0.0, -1.0),
+        Vector::new(0.0, 1.0, 0.0),
+    )
+    .unwrap();
+    let projection = PerspectiveProjection::new(90.0).unwrap();
+    let lens = LensSettings::defocus(1.0, 10.0).unwrap();
+    let config = CameraConfig::new(pose, image, projection, lens);
+    let mut camera = Camera::new(config);
 
     // Bench for different samples per pixel (SPP)
     // 0 SPP configures AntialiasOptions::Disabled
@@ -38,9 +46,9 @@ fn basic_world(c: &mut Criterion) {
                 b.iter(|| {
                     let render_options = RenderOptions::new().parallel(ParallelOptions::ByRows);
                     let image_options = image.antialias(spp);
-                    camera.update_render_options(render_options);
-                    camera.update_image_options(image_options);
-                    black_box(camera.render_in_memory())
+                    camera.set_render_options(render_options);
+                    camera.set_image_options(image_options);
+                    black_box(camera.render_in_memory(&world))
                 })
             },
         );
@@ -52,9 +60,9 @@ fn basic_world(c: &mut Criterion) {
                 b.iter(|| {
                     let render_options = RenderOptions::new().parallel(ParallelOptions::AllAtOnce);
                     let image_options = image.antialias(spp);
-                    camera.update_render_options(render_options);
-                    camera.update_image_options(image_options);
-                    black_box(camera.render_in_memory())
+                    camera.set_render_options(render_options);
+                    camera.set_image_options(image_options);
+                    black_box(camera.render_in_memory(&world))
                 })
             },
         );
@@ -66,9 +74,9 @@ fn basic_world(c: &mut Criterion) {
                 b.iter(|| {
                     let render_options = RenderOptions::new().parallel(ParallelOptions::Series);
                     let image_options = image.antialias(spp);
-                    camera.update_render_options(render_options);
-                    camera.update_image_options(image_options);
-                    black_box(camera.render_in_memory())
+                    camera.set_render_options(render_options);
+                    camera.set_image_options(image_options);
+                    black_box(camera.render_in_memory(&world))
                 })
             },
         );

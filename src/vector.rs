@@ -62,6 +62,10 @@ impl Vector {
         self.len_squared().sqrt()
     }
 
+    pub fn is_finite(&self) -> bool {
+        self.x.is_finite() && self.y.is_finite() && self.z.is_finite()
+    }
+
     pub fn unit(&self) -> UtVector {
         UtVector {
             v: self / self.len(),

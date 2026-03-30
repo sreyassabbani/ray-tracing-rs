@@ -7,7 +7,10 @@ use ray_tracing_rs::{
     materials::{Dielectric as Glass, Lambertian as Matte, Metal},
     objects::{Plane, Sphere},
     vector::Vector,
-    {Camera, HittableList, ImageOptions, Point},
+    {
+        Camera, CameraConfig, CameraPose, HittableList, ImageOptions, LensSettings,
+        PerspectiveProjection, Point,
+    },
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,28 +42,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add(bubble)?;
 
     // Output image config, aspect ratio 16:9
-    let image = ImageOptions::new(400, 225).antialias(100);
+    let image = ImageOptions::new(400, 225)?.antialias(100);
 
     // Camera
-    let vfov = 20.0;
-    let look_from = Point::new(-2.0, 2.0, 1.0);
-    let look_at = Point::new(0.0, 0.0, -1.0);
-    let up = Vector::new(0.0, 1.0, 0.0);
-    let defocus_angle = 10.0;
-    let focus_dist = 3.4;
-
-    let camera = Camera::new(
-        vfov,
-        defocus_angle,
-        focus_dist,
-        look_from,
-        look_at,
-        up,
-        image,
-        world,
+    let pose = CameraPose::look_at(
+        Point::new(-2.0, 2.0, 1.0),
+        Point::new(0.0, 0.0, -1.0),
+        Vector::new(0.0, 1.0, 0.0),
     )?;
+    let projection = PerspectiveProjection::new(20.0)?;
+    let lens = LensSettings::defocus(3.4, 10.0)?;
+    let config = CameraConfig::new(pose, image, projection, lens);
+    let camera = Camera::new(config);
 
-    camera.render("output.ppm")?;
+    camera.render(&world, "output.ppm")?;
 
     Ok(())
 }

@@ -8,7 +8,10 @@ use ray_tracing_rs::{
     objects::Sphere,
     utils::rand::{random, random_range},
     vector::Vector,
-    {Camera, HittableList, ImageOptions, Point},
+    {
+        Camera, CameraConfig, CameraPose, HittableList, ImageOptions, LensSettings,
+        PerspectiveProjection, Point,
+    },
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -58,28 +61,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     world.add(Sphere::new(Point::new(4.0, 1.0, 0.0), 1.0, material3))?;
 
     // Output image config, aspect ratio 16:9
-    let image = ImageOptions::new(1200, 675).antialias(50);
+    let image = ImageOptions::new(1200, 675)?.antialias(50);
 
     // Camera
-    let vfov = 20.0;
-    let look_from = Point::new(13.0, 2.0, 3.0);
-    let look_at = Point::new(0.0, 0.0, 0.0);
-    let up = Vector::new(0.0, 1.0, 0.0);
-    let defocus_angle = 0.6;
-    let focus_dist = 10.0;
-
-    let camera = Camera::new(
-        vfov,
-        defocus_angle,
-        focus_dist,
-        look_from,
-        look_at,
-        up,
-        image,
-        world,
+    let pose = CameraPose::look_at(
+        Point::new(13.0, 2.0, 3.0),
+        Point::new(0.0, 0.0, 0.0),
+        Vector::new(0.0, 1.0, 0.0),
     )?;
+    let projection = PerspectiveProjection::new(20.0)?;
+    let lens = LensSettings::defocus(10.0, 0.6)?;
+    let config = CameraConfig::new(pose, image, projection, lens);
+    let camera = Camera::new(config);
 
-    camera.render("output.ppm")?;
+    camera.render(&world, "output.ppm")?;
 
     Ok(())
 }
