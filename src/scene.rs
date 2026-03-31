@@ -336,11 +336,7 @@ impl Camera {
     ///
     /// The scene is passed in explicitly so camera configuration stays separate
     /// from world ownership.
-    pub fn render<T: AsRef<Path>>(
-        &self,
-        world: &dyn Hittable,
-        path: T,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn render<T: AsRef<Path>>(&self, world: &dyn Hittable, path: T) -> io::Result<()> {
         self.render_with_options(world, path, &RenderOptions::default())
     }
 
@@ -350,7 +346,7 @@ impl Camera {
         world: &dyn Hittable,
         path: T,
         render_options: &RenderOptions,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> io::Result<()> {
         let mut file = OpenOptions::new()
             .write(true)
             .truncate(true)
@@ -461,7 +457,7 @@ impl Camera {
     }
 
     /// Internal function to write P3 PPM header.
-    fn write_ppm_p3_header(&self, file: &mut fs::File) -> Result<(), Box<dyn std::error::Error>> {
+    fn write_ppm_p3_header(&self, file: &mut fs::File) -> io::Result<()> {
         writeln!(file, "P3")?;
         writeln!(
             file,
@@ -473,11 +469,7 @@ impl Camera {
         Ok(())
     }
 
-    fn render_parallel_all(
-        &self,
-        world: &dyn Hittable,
-        file: &mut fs::File,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn render_parallel_all(&self, world: &dyn Hittable, file: &mut fs::File) -> io::Result<()> {
         let mut pixels = vec![
             Color::new(0.0, 0.0, 0.0);
             (self.image_options.height * self.image_options.width) as usize
@@ -503,11 +495,7 @@ impl Camera {
         Ok(())
     }
 
-    fn render_parallel_by_rows(
-        &self,
-        world: &dyn Hittable,
-        file: &mut fs::File,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn render_parallel_by_rows(&self, world: &dyn Hittable, file: &mut fs::File) -> io::Result<()> {
         for j in 0..self.image_options.height {
             info!("Scanlines remaining: {}", self.image_options.height - j);
             io::stdout().flush().unwrap();
@@ -524,11 +512,7 @@ impl Camera {
         Ok(())
     }
 
-    fn render_sequential(
-        &self,
-        world: &dyn Hittable,
-        file: &mut fs::File,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn render_sequential(&self, world: &dyn Hittable, file: &mut fs::File) -> io::Result<()> {
         for j in 0..self.image_options.height {
             info!("Scanlines remaining: {}", self.image_options.height - j);
             io::stdout().flush().unwrap();
