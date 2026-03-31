@@ -13,5 +13,4 @@ pub use scene::{
 };
 pub use vector::Point;
 
-// Probly should revert back to being private
-pub mod utils;
+mod utils;

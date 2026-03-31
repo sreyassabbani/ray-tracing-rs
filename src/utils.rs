@@ -6,10 +6,6 @@ pub fn degrees_to_radians(degrees: f64) -> f64 {
     (degrees / 180.0) * PI
 }
 
-pub fn radians_to_degrees(radians: f64) -> f64 {
-    (radians / PI) * 180.0
-}
-
 pub mod rand {
     use rand::prelude::*;
 

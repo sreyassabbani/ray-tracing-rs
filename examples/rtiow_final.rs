@@ -2,11 +2,11 @@
 //!
 //! Render the final Ray Tracing in One Weekend scene
 
+use rand::Rng;
 use ray_tracing_rs::{
     color::Color,
     materials::{Dielectric as Glass, Lambertian as Matte, Metal},
     objects::Sphere,
-    utils::rand::{random, random_range},
     vector::Vector,
     {
         Camera, CameraConfig, CameraModel, CameraPose, HittableList, ImageOptions,
@@ -25,10 +25,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ground_material,
     ));
 
+    let mut rng = rand::rng();
     for a in -11..11 {
         for b in -11..11 {
-            let choose_mat = random();
-            let center = Point::new(a as f64 + 0.9 * random(), 0.2, b as f64 + 0.9 * random());
+            let choose_mat: f64 = rng.random();
+            let center = Point::new(
+                a as f64 + 0.9 * rng.random::<f64>(),
+                0.2,
+                b as f64 + 0.9 * rng.random::<f64>(),
+            );
 
             if (center - Point::new(4.0, 0.2, 0.0)).len() > 0.9 {
                 if choose_mat < 0.8 {
@@ -39,7 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else if choose_mat < 0.95 {
                     // metal
                     let albedo = Color::random_range(0.5, 1.0);
-                    let fuzz = random_range(0.0, 0.5);
+                    let fuzz = rng.random_range(0.0..0.5);
                     let mat = Metal::new(albedo, fuzz);
                     world.add(Sphere::new(center, 0.2, mat));
                 } else {
