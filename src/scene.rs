@@ -250,21 +250,19 @@ impl CameraModel {
 
 /// Complete validated camera input configuration.
 ///
-/// [`CameraConfig`] groups the stable user-controlled inputs. The expensive,
-/// derived geometry lives on [`Camera`] itself.
+/// [`CameraConfig`] groups the stable user-controlled camera inputs. The
+/// expensive, derived geometry lives on [`Camera`] itself, while render-time
+/// scheduling stays separate.
 #[derive(Clone, Debug)]
 pub struct CameraConfig {
     pose: CameraPose,
     image: ImageOptions,
     projection: PerspectiveProjection,
     model: CameraModel,
-    render: RenderOptions,
 }
 
 impl CameraConfig {
     /// Assemble the validated inputs required to build a [`Camera`].
-    ///
-    /// Render options default to [`RenderOptions::default`].
     pub fn new(
         pose: CameraPose,
         image: ImageOptions,
@@ -276,14 +274,7 @@ impl CameraConfig {
             image,
             projection,
             model,
-            render: RenderOptions::default(),
         }
-    }
-
-    /// Override the render-time scheduling policy.
-    pub fn render(mut self, render: RenderOptions) -> Self {
-        self.render = render;
-        self
     }
 }
 
@@ -291,6 +282,7 @@ impl CameraConfig {
 ///
 /// A [`Camera`] is independent from any particular scene. The same camera can
 /// render multiple worlds, and multiple cameras can render the same world.
+/// Render scheduling is intentionally not stored here.
 #[derive(Clone, Debug)]
 pub struct Camera {
     pose: CameraPose,
@@ -306,7 +298,6 @@ pub struct Camera {
     pixel00_loc: Point,
     pixel_samples_scale: Option<f64>,
     image_options: ImageOptions,
-    render_options: RenderOptions,
 }
 
 impl Camera {
@@ -326,7 +317,6 @@ impl Camera {
             pixel00_loc: Point::new(0.0, 0.0, 0.0),
             pixel_samples_scale: None,
             image_options: config.image,
-            render_options: config.render,
         };
         camera.recompute_geometry();
         camera
@@ -338,12 +328,7 @@ impl Camera {
         self.recompute_geometry();
     }
 
-    /// Replace only the render scheduling options.
-    pub fn set_render_options(&mut self, render_options: RenderOptions) {
-        self.render_options = render_options;
-    }
-
-    /// Render the camera to a P3 PPM file.
+    /// Render the camera to a P3 PPM file using default render options.
     ///
     /// The scene is passed in explicitly so camera configuration stays separate
     /// from world ownership.
@@ -351,6 +336,16 @@ impl Camera {
         &self,
         world: &dyn Hittable,
         path: T,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.render_with_options(world, path, &RenderOptions::default())
+    }
+
+    /// Render the camera to a P3 PPM file using an explicit render policy.
+    pub fn render_with_options<T: AsRef<Path>>(
+        &self,
+        world: &dyn Hittable,
+        path: T,
+        render_options: &RenderOptions,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut file = OpenOptions::new()
             .write(true)
@@ -361,7 +356,7 @@ impl Camera {
         self.write_ppm_p3_header(&mut file)?;
 
         use ParallelOptions::*;
-        match self.render_options.parallel {
+        match render_options.parallel {
             AllAtOnce => self.render_parallel_all(world, &mut file)?,
             ByRows => self.render_parallel_by_rows(world, &mut file)?,
             Series => self.render_sequential(world, &mut file)?,
@@ -370,13 +365,22 @@ impl Camera {
         Ok(())
     }
 
-    /// Render the camera into memory without writing a file.
+    /// Render the camera into memory without writing a file using default render options.
     ///
     /// This is useful for tests and benchmarks that want to measure ray
     /// generation and shading without including file I/O.
     pub fn render_in_memory(&self, world: &dyn Hittable) -> Vec<Color> {
+        self.render_in_memory_with_options(world, &RenderOptions::default())
+    }
+
+    /// Render the camera into memory using an explicit render policy.
+    pub fn render_in_memory_with_options(
+        &self,
+        world: &dyn Hittable,
+        render_options: &RenderOptions,
+    ) -> Vec<Color> {
         use ParallelOptions::*;
-        match self.render_options.parallel {
+        match render_options.parallel {
             AllAtOnce => {
                 let mut pixels = vec![
                     Color::new(0.0, 0.0, 0.0);

@@ -46,9 +46,8 @@ fn basic_world(c: &mut Criterion) {
                 b.iter(|| {
                     let render_options = RenderOptions::new().parallel(ParallelOptions::ByRows);
                     let image_options = image.antialias(spp);
-                    camera.set_render_options(render_options);
                     camera.set_image_options(image_options);
-                    black_box(camera.render_in_memory(&world))
+                    black_box(camera.render_in_memory_with_options(&world, &render_options))
                 })
             },
         );
@@ -60,9 +59,8 @@ fn basic_world(c: &mut Criterion) {
                 b.iter(|| {
                     let render_options = RenderOptions::new().parallel(ParallelOptions::AllAtOnce);
                     let image_options = image.antialias(spp);
-                    camera.set_render_options(render_options);
                     camera.set_image_options(image_options);
-                    black_box(camera.render_in_memory(&world))
+                    black_box(camera.render_in_memory_with_options(&world, &render_options))
                 })
             },
         );
@@ -74,9 +72,8 @@ fn basic_world(c: &mut Criterion) {
                 b.iter(|| {
                     let render_options = RenderOptions::new().parallel(ParallelOptions::Series);
                     let image_options = image.antialias(spp);
-                    camera.set_render_options(render_options);
                     camera.set_image_options(image_options);
-                    black_box(camera.render_in_memory(&world))
+                    black_box(camera.render_in_memory_with_options(&world, &render_options))
                 })
             },
         );
