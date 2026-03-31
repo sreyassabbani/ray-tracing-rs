@@ -68,7 +68,7 @@ fn perspective_projection_rejects_invalid_values() {
 fn camera_model_rejects_invalid_values() {
     assert_eq!(
         CameraModel::pinhole(0.0).unwrap_err(),
-        ConfigError::InvalidFocusDistance
+        ConfigError::InvalidViewportDistance
     );
     assert_eq!(
         CameraModel::thin_lens(1.0, -0.1).unwrap_err(),

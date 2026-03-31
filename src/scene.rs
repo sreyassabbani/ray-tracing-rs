@@ -200,7 +200,7 @@ impl PerspectiveProjection {
 #[derive(Clone, Copy, Debug)]
 pub enum CameraModel {
     Pinhole {
-        focus_dist: f64,
+        viewport_dist: f64,
     },
     ThinLens {
         focus_dist: f64,
@@ -209,10 +209,13 @@ pub enum CameraModel {
 }
 
 impl CameraModel {
-    /// Create a pinhole camera model with a validated focus distance.
-    pub fn pinhole(focus_dist: f64) -> Result<Self, ConfigError> {
-        validate_focus_dist(focus_dist)?;
-        Ok(Self::Pinhole { focus_dist })
+    /// Create a pinhole camera model with a validated viewport distance.
+    ///
+    /// This controls the distance from the camera center to the virtual image
+    /// plane used to derive the viewport size.
+    pub fn pinhole(viewport_dist: f64) -> Result<Self, ConfigError> {
+        validate_viewport_dist(viewport_dist)?;
+        Ok(Self::Pinhole { viewport_dist })
     }
 
     /// Create a thin-lens camera model with depth-of-field blur.
@@ -227,9 +230,10 @@ impl CameraModel {
         })
     }
 
-    fn focus_dist(self) -> f64 {
+    fn projection_plane_dist(self) -> f64 {
         match self {
-            Self::Pinhole { focus_dist } | Self::ThinLens { focus_dist, .. } => focus_dist,
+            Self::Pinhole { viewport_dist } => viewport_dist,
+            Self::ThinLens { focus_dist, .. } => focus_dist,
         }
     }
 
@@ -430,8 +434,8 @@ impl Camera {
     fn recompute_geometry(&mut self) {
         let theta = (self.projection.vfov / 180.0) * std::f64::consts::PI;
         let h = (theta / 2.0).tan();
-        let focus_dist = self.model.focus_dist();
-        let viewport_height = 2.0 * h * focus_dist;
+        let projection_plane_dist = self.model.projection_plane_dist();
+        let viewport_height = 2.0 * h * projection_plane_dist;
         let viewport_width = viewport_height * self.image_options.aspect_ratio();
 
         self.viewport_u = self.pose.u.inner() * viewport_width;
@@ -439,14 +443,14 @@ impl Camera {
         self.pixel_delta_u = self.viewport_u / self.image_options.width as f64;
         self.pixel_delta_v = self.viewport_v / self.image_options.height as f64;
         self.viewport_upper_left = self.pose.center
-            - (self.pose.w.inner() * focus_dist)
+            - (self.pose.w.inner() * projection_plane_dist)
             - self.viewport_u / 2.0
             - self.viewport_v / 2.0;
         self.pixel00_loc =
             self.viewport_upper_left + (self.pixel_delta_u + self.pixel_delta_v) * 0.5;
 
-        let defocus_radius =
-            focus_dist * (utils::degrees_to_radians(self.model.defocus_angle() / 2.0)).tan();
+        let defocus_radius = projection_plane_dist
+            * (utils::degrees_to_radians(self.model.defocus_angle() / 2.0)).tan();
         self.defocus_disk_u = self.pose.u.inner() * defocus_radius;
         self.defocus_disk_v = self.pose.v.inner() * defocus_radius;
 
@@ -596,6 +600,13 @@ impl Camera {
     }
 }
 
+fn validate_viewport_dist(viewport_dist: f64) -> Result<(), ConfigError> {
+    if !viewport_dist.is_finite() || viewport_dist <= 0.0 {
+        return Err(ConfigError::InvalidViewportDistance);
+    }
+    Ok(())
+}
+
 fn validate_focus_dist(focus_dist: f64) -> Result<(), ConfigError> {
     if !focus_dist.is_finite() || focus_dist <= 0.0 {
         return Err(ConfigError::InvalidFocusDistance);
@@ -617,6 +628,8 @@ pub enum ConfigError {
     InvalidImageDimensions,
     #[error("vertical field of view must be finite and between 0 and 180 degrees")]
     InvalidFieldOfView,
+    #[error("viewport distance must be finite and greater than zero")]
+    InvalidViewportDistance,
     #[error("focus distance must be finite and greater than zero")]
     InvalidFocusDistance,
     #[error("defocus angle must be finite and between 0 and 180 degrees")]
