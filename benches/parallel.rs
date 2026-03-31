@@ -21,8 +21,8 @@ fn basic_world(c: &mut Criterion) {
     let diffuse = Lambertian::new(Color::new(1.0, 0.5, 0.5));
     let sphere = Sphere::new(Point::new(0.0, 0.0, -1.0), 0.5, diffuse.clone());
     let ground = Sphere::new(Point::new(0.0, -100.5, -1.0), 100.0, diffuse);
-    world.add(sphere).unwrap();
-    world.add(ground).unwrap();
+    world.add(sphere);
+    world.add(ground);
 
     let image = ImageOptions::new(16, 9).unwrap();
     let pose = CameraPose::look_at(

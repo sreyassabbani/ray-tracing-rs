@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Point::new(0.0, -1000.0, 0.0),
         1000.0,
         ground_material,
-    ))?;
+    ));
 
     for a in -11..11 {
         for b in -11..11 {
@@ -35,30 +35,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // diffuse
                     let albedo = Color::random() * Color::random();
                     let mat = Matte::new(albedo);
-                    world.add(Sphere::new(center, 0.2, mat))?;
+                    world.add(Sphere::new(center, 0.2, mat));
                 } else if choose_mat < 0.95 {
                     // metal
                     let albedo = Color::random_range(0.5, 1.0);
                     let fuzz = random_range(0.0, 0.5);
                     let mat = Metal::new(albedo, fuzz);
-                    world.add(Sphere::new(center, 0.2, mat))?;
+                    world.add(Sphere::new(center, 0.2, mat));
                 } else {
                     // glass
                     let mat = Glass::new(1.5);
-                    world.add(Sphere::new(center, 0.2, mat))?;
+                    world.add(Sphere::new(center, 0.2, mat));
                 }
             }
         }
     }
 
     let material1 = Glass::new(1.5);
-    world.add(Sphere::new(Point::new(0.0, 1.0, 0.0), 1.0, material1))?;
+    world.add(Sphere::new(Point::new(0.0, 1.0, 0.0), 1.0, material1));
 
     let material2 = Matte::new(Color::new(0.4, 0.2, 0.1));
-    world.add(Sphere::new(Point::new(-4.0, 1.0, 0.0), 1.0, material2))?;
+    world.add(Sphere::new(Point::new(-4.0, 1.0, 0.0), 1.0, material2));
 
     let material3 = Metal::new(Color::new(0.7, 0.6, 0.5), 0.0);
-    world.add(Sphere::new(Point::new(4.0, 1.0, 0.0), 1.0, material3))?;
+    world.add(Sphere::new(Point::new(4.0, 1.0, 0.0), 1.0, material3));
 
     // Output image config, aspect ratio 16:9
     let image = ImageOptions::new(1200, 675)?.antialias(50);

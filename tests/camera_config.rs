@@ -22,9 +22,7 @@ fn blank_world() -> HittableList {
 fn sphere_world() -> HittableList {
     let mut world = HittableList::new();
     let material = Lambertian::new(Color::new(0.8, 0.3, 0.3));
-    world
-        .add(Sphere::new(Point::new(0.0, 0.0, -1.0), 0.5, material))
-        .unwrap();
+    world.add(Sphere::new(Point::new(0.0, 0.0, -1.0), 0.5, material));
     world
 }
 

@@ -16,8 +16,6 @@ pub use sphere::Sphere;
 
 use std::sync::Arc;
 
-use thiserror::Error;
-
 use crate::materials::Material;
 use crate::ray::Ray;
 use crate::utils::interval::Interval;
@@ -57,23 +55,31 @@ impl Default for HittableList {
 }
 
 impl HittableList {
-    /// Create a new [`HittableList`]
+    /// Create a new [`HittableList`].
     pub fn new() -> Self {
         Self(Vec::new())
     }
 
-    /// Add a [`Hittable`] object to a [`HittableList`]. Currently never returns an error, even though it is currently typed not as such.
+    /// Add a [`Hittable`] object to a [`HittableList`].
     ///
-    /// ```rs
+    /// Returns `self` so calls can be chained when building a world.
+    ///
+    /// ```ignore
+    /// use ray_tracing_rs::{
+    ///     color::Color,
+    ///     materials::Lambertian,
+    ///     objects::Sphere,
+    ///     HittableList,
+    ///     Point,
+    /// };
+    ///
     /// let mut world = HittableList::new();
-    /// let sphere = Sphere::new(Point::new(0.0, 0.0, -1.0), 0.5);
-    /// let ground = Sphere::new(Point::new(0.0, -100.5, -1.0), 100.0);
-    /// world.add(Rc::new(sphere))?;
-    /// world.add(Rc::new(ground))?;
+    /// let material = Lambertian::new(Color::new(0.8, 0.8, 0.0));
+    /// world.add(Sphere::new(Point::new(0.0, 0.0, -1.0), 0.5, material));
     /// ```
-    pub fn add(&mut self, object: impl Hittable + 'static) -> Result<&mut Self, Error> {
+    pub fn add(&mut self, object: impl Hittable + 'static) -> &mut Self {
         self.0.push(Arc::new(object));
-        Ok(self)
+        self
     }
 }
 
@@ -100,7 +106,3 @@ pub trait Hittable: Send + Sync {
     /// Evaluates whether a [`Ray`] hits an object, returning a `Option<HitRecord>`. Implementing this function for all ray-interacting objects is part of the [`Hittable`] trait.
     fn hit(&self, ray_t: Interval, ray: &Ray) -> Option<HitRecord>;
 }
-
-#[derive(Debug, Error)]
-/// Placeholder error type for hittable list operations.
-pub enum Error {}

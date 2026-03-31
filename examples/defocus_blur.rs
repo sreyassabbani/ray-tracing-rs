@@ -35,11 +35,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut world = HittableList::new();
 
     world
-        .add(ground)?
-        .add(center)?
-        .add(left)?
-        .add(right)?
-        .add(bubble)?;
+        .add(ground)
+        .add(center)
+        .add(left)
+        .add(right)
+        .add(bubble);
 
     // Output image config, aspect ratio 16:9
     let image = ImageOptions::new(400, 225)?.antialias(100);
