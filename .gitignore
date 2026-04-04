@@ -8,4 +8,4 @@ output.ppm
 # No
 local/
 
-.direnv
+.direnv/
