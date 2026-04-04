@@ -15,6 +15,13 @@ You can specify `<example-name>` with any example defined in `Cargo.toml`. If yo
 ```
 You can open PPM files on MacOS with `magick output.ppm display:`.
 
+### Benchmarking Examples
+You can benchmark the bundled example executables with:
+```
+  cargo run --release --bin bench-examples -- --repeat 3
+```
+This builds the release examples first and then times the actual example binaries.
+
 #### Things to Say
 Initially, I wrote my `Vector` struct as generic as possible, employing a `Numeric` trait and supporting `N`-`Vector`s. Moreover, I couldn't even implement `Copy`, so simple arithmetic operations almost always ended up being horrible to write. I learned my lesson after like 5 chapters, when I was looking at other implementations of RTIOW in Rust: I was never going to need `Vector<10, f64>` or even `Vector<3, f32>`! Even doing this for completeness was stupid.
 
