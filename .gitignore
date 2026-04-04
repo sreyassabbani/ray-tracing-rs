@@ -7,3 +7,5 @@ output.ppm
 
 # No
 local/
+
+.direnv
