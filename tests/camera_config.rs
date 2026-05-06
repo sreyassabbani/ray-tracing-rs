@@ -3,16 +3,14 @@ use ray_tracing_rs::materials::Lambertian;
 use ray_tracing_rs::objects::Sphere;
 use ray_tracing_rs::vector::Vector;
 use ray_tracing_rs::{
-    Camera, CameraConfig, CameraModel, CameraPose, ConfigError, HittableList, ImageOptions,
-    PerspectiveProjection, Point,
+    Camera, CameraConfig, CameraModel, CameraPose, ConfigError, HittableList, ImageOptions, Point,
 };
 
 fn test_camera(look_from: Point, look_at: Point) -> Camera {
     let pose = CameraPose::look_at(look_from, look_at, Vector::new(0.0, 1.0, 0.0)).unwrap();
     let image = ImageOptions::new(8, 4).unwrap();
-    let projection = PerspectiveProjection::new(60.0).unwrap();
-    let model = CameraModel::pinhole(1.0).unwrap();
-    Camera::new(CameraConfig::new(pose, image, projection, model))
+    let model = CameraModel::pinhole(60.0, 1.0).unwrap();
+    Camera::new(CameraConfig::new(pose, image, model))
 }
 
 fn blank_world() -> HittableList {
@@ -47,17 +45,21 @@ fn image_options_reject_zero_dimensions() {
 }
 
 #[test]
-fn perspective_projection_rejects_invalid_values() {
+fn camera_model_rejects_invalid_field_of_view() {
     assert_eq!(
-        PerspectiveProjection::new(0.0).unwrap_err(),
+        CameraModel::pinhole(0.0, 1.0).unwrap_err(),
         ConfigError::InvalidFieldOfView
     );
     assert_eq!(
-        PerspectiveProjection::new(180.0).unwrap_err(),
+        CameraModel::thin_lens(180.0, 1.0, 0.5).unwrap_err(),
         ConfigError::InvalidFieldOfView
     );
     assert_eq!(
-        PerspectiveProjection::new(f64::NAN).unwrap_err(),
+        CameraModel::pinhole(f64::NAN, 1.0).unwrap_err(),
+        ConfigError::InvalidFieldOfView
+    );
+    assert_eq!(
+        CameraModel::thin_lens(f64::INFINITY, 1.0, 0.5).unwrap_err(),
         ConfigError::InvalidFieldOfView
     );
 }
@@ -65,19 +67,19 @@ fn perspective_projection_rejects_invalid_values() {
 #[test]
 fn camera_model_rejects_invalid_values() {
     assert_eq!(
-        CameraModel::pinhole(0.0).unwrap_err(),
+        CameraModel::pinhole(60.0, 0.0).unwrap_err(),
         ConfigError::InvalidViewportDistance
     );
     assert_eq!(
-        CameraModel::thin_lens(1.0, -0.1).unwrap_err(),
+        CameraModel::thin_lens(60.0, 1.0, -0.1).unwrap_err(),
         ConfigError::InvalidDefocusAngle
     );
     assert_eq!(
-        CameraModel::thin_lens(1.0, 0.0).unwrap_err(),
+        CameraModel::thin_lens(60.0, 1.0, 0.0).unwrap_err(),
         ConfigError::InvalidDefocusAngle
     );
     assert_eq!(
-        CameraModel::thin_lens(f64::NAN, 0.5).unwrap_err(),
+        CameraModel::thin_lens(60.0, f64::NAN, 0.5).unwrap_err(),
         ConfigError::InvalidFocusDistance
     );
 }

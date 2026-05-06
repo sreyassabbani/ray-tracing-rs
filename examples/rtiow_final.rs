@@ -8,10 +8,7 @@ use ray_tracing_rs::{
     materials::{Dielectric as Glass, Lambertian as Matte, Metal},
     objects::Sphere,
     vector::Vector,
-    {
-        Camera, CameraConfig, CameraModel, CameraPose, HittableList, ImageOptions,
-        PerspectiveProjection, Point,
-    },
+    {Camera, CameraConfig, CameraModel, CameraPose, HittableList, ImageOptions, Point},
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -74,9 +71,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Point::new(0.0, 0.0, 0.0),
         Vector::new(0.0, 1.0, 0.0),
     )?;
-    let projection = PerspectiveProjection::new(20.0)?;
-    let model = CameraModel::thin_lens(10.0, 0.6)?;
-    let config = CameraConfig::new(pose, image, projection, model);
+    let model = CameraModel::thin_lens(20.0, 10.0, 0.6)?;
+    let config = CameraConfig::new(pose, image, model);
     let camera = Camera::new(config);
 
     camera.render(&world, "output.ppm")?;

@@ -1,8 +1,8 @@
 //! Camera configuration and rendering API.
 //!
 //! The public flow is:
-//! 1. Build validated camera inputs such as [`CameraPose`], [`PerspectiveProjection`],
-//!    [`CameraModel`], and [`ImageOptions`].
+//! 1. Build validated camera inputs such as [`CameraPose`], [`CameraModel`],
+//!    and [`ImageOptions`].
 //! 2. Assemble them into a [`CameraConfig`].
 //! 3. Build a reusable [`Camera`].
 //! 4. Render that camera against any world implementing [`Hittable`].
@@ -174,81 +174,111 @@ impl CameraPose {
     }
 }
 
-/// Validated perspective projection settings for a camera.
-#[derive(Clone, Copy, Debug)]
-pub struct PerspectiveProjection {
-    vfov: f64,
-}
-
-impl PerspectiveProjection {
-    /// Create a perspective projection from a vertical field of view in degrees.
-    ///
-    /// Valid values are finite numbers strictly between 0 and 180.
-    pub fn new(vfov_degrees: f64) -> Result<Self, ConfigError> {
-        if !vfov_degrees.is_finite() || vfov_degrees <= 0.0 || vfov_degrees >= 180.0 {
-            return Err(ConfigError::InvalidFieldOfView);
-        }
-
-        Ok(Self { vfov: vfov_degrees })
-    }
-}
-
-/// Optical camera model settings.
+/// Complete ray-generation model for a camera.
 ///
-/// [`CameraModel::Pinhole`] disables depth-of-field blur. [`CameraModel::ThinLens`]
-/// enables it by sampling a defocus disk.
+/// Each variant owns the projection and optical settings that are valid for
+/// that model, so unsupported combinations cannot be represented.
 #[derive(Clone, Copy, Debug)]
 pub enum CameraModel {
-    Pinhole {
-        viewport_dist: f64,
-    },
-    ThinLens {
-        focus_dist: f64,
-        defocus_angle_degrees: f64,
-    },
+    Pinhole(PinholeCamera),
+    ThinLens(ThinLensCamera),
 }
 
-impl CameraModel {
-    /// Create a pinhole camera model with a validated viewport distance.
-    ///
-    /// This controls the distance from the camera center to the virtual image
-    /// plane used to derive the viewport size.
-    pub fn pinhole(viewport_dist: f64) -> Result<Self, ConfigError> {
-        validate_viewport_dist(viewport_dist)?;
-        Ok(Self::Pinhole { viewport_dist })
-    }
+/// Validated settings for a perspective pinhole camera.
+#[derive(Clone, Copy, Debug)]
+pub struct PinholeCamera {
+    vfov_degrees: f64,
+    viewport_dist: f64,
+}
 
-    /// Create a thin-lens camera model with depth-of-field blur.
+impl PinholeCamera {
+    /// Create a perspective pinhole camera.
     ///
-    /// Both `focus_dist` and `defocus_angle_degrees` are validated.
-    pub fn thin_lens(focus_dist: f64, defocus_angle_degrees: f64) -> Result<Self, ConfigError> {
+    /// `viewport_dist` controls the distance from the camera center to the
+    /// virtual image plane used to derive the viewport size.
+    pub fn new(vfov_degrees: f64, viewport_dist: f64) -> Result<Self, ConfigError> {
+        validate_vfov(vfov_degrees)?;
+        validate_viewport_dist(viewport_dist)?;
+        Ok(Self {
+            vfov_degrees,
+            viewport_dist,
+        })
+    }
+}
+
+/// Validated settings for a perspective thin-lens camera.
+#[derive(Clone, Copy, Debug)]
+pub struct ThinLensCamera {
+    vfov_degrees: f64,
+    focus_dist: f64,
+    defocus_angle_degrees: f64,
+}
+
+impl ThinLensCamera {
+    /// Create a perspective thin-lens camera with depth-of-field blur.
+    ///
+    /// `focus_dist` and `defocus_angle_degrees` control defocus sampling.
+    pub fn new(
+        vfov_degrees: f64,
+        focus_dist: f64,
+        defocus_angle_degrees: f64,
+    ) -> Result<Self, ConfigError> {
+        validate_vfov(vfov_degrees)?;
         validate_focus_dist(focus_dist)?;
         validate_defocus_angle(defocus_angle_degrees)?;
-        Ok(Self::ThinLens {
+        Ok(Self {
+            vfov_degrees,
             focus_dist,
             defocus_angle_degrees,
         })
     }
+}
+
+impl CameraModel {
+    /// Create a perspective pinhole camera model.
+    pub fn pinhole(vfov_degrees: f64, viewport_dist: f64) -> Result<Self, ConfigError> {
+        Ok(Self::Pinhole(PinholeCamera::new(
+            vfov_degrees,
+            viewport_dist,
+        )?))
+    }
+
+    /// Create a perspective thin-lens camera model with depth-of-field blur.
+    pub fn thin_lens(
+        vfov_degrees: f64,
+        focus_dist: f64,
+        defocus_angle_degrees: f64,
+    ) -> Result<Self, ConfigError> {
+        Ok(Self::ThinLens(ThinLensCamera::new(
+            vfov_degrees,
+            focus_dist,
+            defocus_angle_degrees,
+        )?))
+    }
+
+    fn vfov(self) -> f64 {
+        match self {
+            Self::Pinhole(camera) => camera.vfov_degrees,
+            Self::ThinLens(camera) => camera.vfov_degrees,
+        }
+    }
 
     fn projection_plane_dist(self) -> f64 {
         match self {
-            Self::Pinhole { viewport_dist } => viewport_dist,
-            Self::ThinLens { focus_dist, .. } => focus_dist,
+            Self::Pinhole(camera) => camera.viewport_dist,
+            Self::ThinLens(camera) => camera.focus_dist,
         }
     }
 
     fn defocus_angle(self) -> f64 {
         match self {
-            Self::Pinhole { .. } => 0.0,
-            Self::ThinLens {
-                defocus_angle_degrees,
-                ..
-            } => defocus_angle_degrees,
+            Self::Pinhole(_) => 0.0,
+            Self::ThinLens(camera) => camera.defocus_angle_degrees,
         }
     }
 
     fn uses_defocus(self) -> bool {
-        matches!(self, Self::ThinLens { .. })
+        matches!(self, Self::ThinLens(_))
     }
 }
 
@@ -261,24 +291,13 @@ impl CameraModel {
 pub struct CameraConfig {
     pose: CameraPose,
     image: ImageOptions,
-    projection: PerspectiveProjection,
     model: CameraModel,
 }
 
 impl CameraConfig {
     /// Assemble the validated inputs required to build a [`Camera`].
-    pub fn new(
-        pose: CameraPose,
-        image: ImageOptions,
-        projection: PerspectiveProjection,
-        model: CameraModel,
-    ) -> Self {
-        Self {
-            pose,
-            image,
-            projection,
-            model,
-        }
+    pub fn new(pose: CameraPose, image: ImageOptions, model: CameraModel) -> Self {
+        Self { pose, image, model }
     }
 }
 
@@ -290,7 +309,6 @@ impl CameraConfig {
 #[derive(Clone, Debug)]
 pub struct Camera {
     pose: CameraPose,
-    projection: PerspectiveProjection,
     model: CameraModel,
     viewport_u: Vector,
     viewport_v: Vector,
@@ -309,7 +327,6 @@ impl Camera {
     pub fn new(config: CameraConfig) -> Self {
         let mut camera = Self {
             pose: config.pose,
-            projection: config.projection,
             model: config.model,
             viewport_u: Vector::new(0.0, 0.0, 0.0),
             viewport_v: Vector::new(0.0, 0.0, 0.0),
@@ -428,7 +445,7 @@ impl Camera {
     }
 
     fn recompute_geometry(&mut self) {
-        let theta = (self.projection.vfov / 180.0) * std::f64::consts::PI;
+        let theta = (self.model.vfov() / 180.0) * std::f64::consts::PI;
         let h = (theta / 2.0).tan();
         let projection_plane_dist = self.model.projection_plane_dist();
         let viewport_height = 2.0 * h * projection_plane_dist;
@@ -582,6 +599,13 @@ impl Camera {
         let p = Vector::random_in_unit_disk();
         self.pose.center + (self.defocus_disk_u * p.x()) + (self.defocus_disk_v * p.y())
     }
+}
+
+fn validate_vfov(vfov_degrees: f64) -> Result<(), ConfigError> {
+    if !vfov_degrees.is_finite() || vfov_degrees <= 0.0 || vfov_degrees >= 180.0 {
+        return Err(ConfigError::InvalidFieldOfView);
+    }
+    Ok(())
 }
 
 fn validate_viewport_dist(viewport_dist: f64) -> Result<(), ConfigError> {
