@@ -137,3 +137,36 @@ fn multiple_cameras_can_render_the_same_world() {
     assert_eq!(pixels_b.len(), 32);
     assert_ne!(pixels_a, pixels_b);
 }
+
+#[test]
+fn image_options_expose_dimensions() {
+    let image = ImageOptions::new(16, 9).unwrap();
+
+    assert_eq!(image.width(), 16);
+    assert_eq!(image.height(), 9);
+    assert_eq!(image.aspect_ratio(), 16.0 / 9.0);
+}
+
+#[test]
+fn render_image_preserves_dimensions_and_pixels() {
+    let camera = test_camera(Point::new(0.0, 0.0, 0.0), Point::new(0.0, 0.0, -1.0));
+    let world = blank_world();
+
+    let image = camera.render_image(&world);
+
+    assert_eq!(image.width(), 8);
+    assert_eq!(image.height(), 4);
+    assert_eq!(image.len(), 32);
+    assert!(!image.is_empty());
+    assert_eq!(image.pixels().len(), 32);
+    assert_eq!(image.to_rgba8().len(), 32 * 4);
+}
+
+#[test]
+fn color_conversion_matches_ppm_display_conversion() {
+    let color = Color::new(0.25, 1.0, 4.0);
+
+    assert_eq!(color.to_rgb8(), [127, 255, 255]);
+    assert_eq!(color.to_rgba8(), [127, 255, 255, 255]);
+    assert_eq!(color.to_string(), "127 255 255");
+}

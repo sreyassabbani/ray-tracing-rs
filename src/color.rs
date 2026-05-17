@@ -5,7 +5,7 @@ use std::ops;
 
 use crate::utils::rand::{random, random_range};
 // Was `Copy` a good idea?
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Color {
     r: f64,
     g: f64,
@@ -32,6 +32,26 @@ impl Color {
             b: random_range(min, max),
         }
     }
+
+    /// Convert this linear RGB color to gamma-corrected 8-bit RGB.
+    pub fn to_rgb8(self) -> [u8; 3] {
+        [
+            linear_channel_to_display_u8(self.r),
+            linear_channel_to_display_u8(self.g),
+            linear_channel_to_display_u8(self.b),
+        ]
+    }
+
+    /// Convert this linear RGB color to gamma-corrected 8-bit RGBA.
+    pub fn to_rgba8(self) -> [u8; 4] {
+        let [r, g, b] = self.to_rgb8();
+        [r, g, b, 255]
+    }
+}
+
+fn linear_channel_to_display_u8(channel: f64) -> u8 {
+    let gamma_corrected = if channel > 0.0 { channel.sqrt() } else { 0.0 };
+    (255.0 * gamma_corrected.clamp(0.0, 1.0)) as u8
 }
 
 impl ops::Mul<f64> for Color {
@@ -87,17 +107,7 @@ impl ops::AddAssign<Color> for Color {
 
 impl fmt::Display for Color {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Pray compiler optimizes this
-        let linear_to_gamma = |e: f64| if e > 0.0 { e.sqrt() } else { 0.0 };
-
-        let r = linear_to_gamma(self.r);
-        let g = linear_to_gamma(self.g);
-        let b = linear_to_gamma(self.b);
-
-        // P3 PPM format
-        let r = (255.0 * r.clamp(0.0, 1.0)) as u8;
-        let g = (255.0 * g.clamp(0.0, 1.0)) as u8;
-        let b = (255.0 * b.clamp(0.0, 1.0)) as u8;
+        let [r, g, b] = self.to_rgb8();
 
         write!(f, "{} {} {}", r, g, b)
     }

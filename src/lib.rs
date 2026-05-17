@@ -10,7 +10,7 @@ pub mod vector;
 pub use objects::HittableList;
 pub use scene::{
     Camera, CameraConfig, CameraModel, CameraPose, ConfigError, ImageOptions, PinholeCamera,
-    ThinLensCamera,
+    RenderedImage, ThinLensCamera,
 };
 pub use vector::Point;
 

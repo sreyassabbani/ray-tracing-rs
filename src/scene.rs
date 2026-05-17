@@ -64,6 +64,16 @@ impl ImageOptions {
         })
     }
 
+    /// Return the image width in pixels.
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    /// Return the image height in pixels.
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
     /// Return the image aspect ratio as `width / height`.
     pub fn aspect_ratio(&self) -> f64 {
         self.width as f64 / self.height as f64
@@ -85,6 +95,72 @@ impl ImageOptions {
             self.antialias = AntialiasOptions::Enabled(spp);
         }
         self
+    }
+}
+
+/// A rendered image with dimensions and linear RGB pixels.
+///
+/// This is the image boundary most callers should prefer when they need to keep
+/// the render result in memory. It preserves the linear color data while also
+/// providing byte conversion for display surfaces and texture uploads.
+#[derive(Clone, Debug)]
+pub struct RenderedImage {
+    width: u32,
+    height: u32,
+    pixels: Vec<Color>,
+}
+
+impl RenderedImage {
+    fn new(image_options: ImageOptions, pixels: Vec<Color>) -> Self {
+        debug_assert_eq!(
+            pixels.len(),
+            (image_options.width as usize) * (image_options.height as usize)
+        );
+
+        Self {
+            width: image_options.width,
+            height: image_options.height,
+            pixels,
+        }
+    }
+
+    /// Return the image width in pixels.
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    /// Return the image height in pixels.
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// Return the total number of pixels.
+    pub fn len(&self) -> usize {
+        self.pixels.len()
+    }
+
+    /// Return whether this image has no pixels.
+    pub fn is_empty(&self) -> bool {
+        self.pixels.is_empty()
+    }
+
+    /// Borrow the linear RGB pixels in row-major order.
+    pub fn pixels(&self) -> &[Color] {
+        &self.pixels
+    }
+
+    /// Consume the image and return the linear RGB pixels in row-major order.
+    pub fn into_pixels(self) -> Vec<Color> {
+        self.pixels
+    }
+
+    /// Convert the image to gamma-corrected RGBA bytes in row-major order.
+    pub fn to_rgba8(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(self.pixels.len() * 4);
+        for pixel in &self.pixels {
+            bytes.extend_from_slice(&pixel.to_rgba8());
+        }
+        bytes
     }
 }
 
@@ -388,6 +464,23 @@ impl Camera {
     /// generation and shading without including file I/O.
     pub fn render_in_memory(&self, world: &dyn Hittable) -> Vec<Color> {
         self.render_in_memory_with_options(world, &RenderOptions::default())
+    }
+
+    /// Render the camera into a dimensioned in-memory image using default render options.
+    pub fn render_image(&self, world: &dyn Hittable) -> RenderedImage {
+        self.render_image_with_options(world, &RenderOptions::default())
+    }
+
+    /// Render the camera into a dimensioned in-memory image using an explicit render policy.
+    pub fn render_image_with_options(
+        &self,
+        world: &dyn Hittable,
+        render_options: &RenderOptions,
+    ) -> RenderedImage {
+        RenderedImage::new(
+            self.image_options,
+            self.render_in_memory_with_options(world, render_options),
+        )
     }
 
     /// Render the camera into memory using an explicit render policy.
